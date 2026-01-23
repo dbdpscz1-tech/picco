@@ -16,8 +16,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-[#0d1117]">
-      {/* Header
-      */}
       <header className="border-b border-[#21262d] bg-[#161b22]">
         <div className="mx-auto max-w-6xl px-6 py-5">
           <h1 className="text-2xl font-bold tracking-tight text-[#f0f6fc]">
