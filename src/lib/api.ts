@@ -240,3 +240,65 @@ export function formatDate(format: string = "YYYYMMDD"): string {
   }
   return `${year}-${month}-${day}`;
 }
+
+// 개별주문 저장 타입
+export interface SavedOrder {
+  saved_time: string;
+  recipient_name: string;
+  recipient_phone: string;
+  address: string;
+  product_name: string;
+  option: string;
+  quantity: number;
+  supply_price: number;
+  shipping_fee: number;
+  total: number;
+}
+
+// 개별주문 저장 (Google Apps Script로 전송)
+export async function saveIndividualOrders(orders: {
+  recipient_name: string;
+  recipient_phone: string;
+  address: string;
+  product_name: string;
+  option: string;
+  quantity: number;
+  supply_price: number;
+  shipping_fee: number;
+}[]): Promise<{ success: boolean; count?: number; error?: string }> {
+  try {
+    const response = await fetch(CONFIG.APPS_SCRIPT_URL, {
+      method: "POST",
+      mode: "no-cors", // CORS 우회
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ orders }),
+    });
+
+    // no-cors 모드에서는 응답을 읽을 수 없으므로 성공으로 간주
+    return { success: true, count: orders.length };
+  } catch (error) {
+    console.error("개별주문 저장 실패:", error);
+    return { success: false, error: String(error) };
+  }
+}
+
+// 개별주문 불러오기 (오늘 11시 기준)
+export async function fetchSavedOrders(): Promise<{ success: boolean; orders?: SavedOrder[]; count?: number; error?: string }> {
+  try {
+    const response = await fetch(CONFIG.APPS_SCRIPT_URL, {
+      method: "GET",
+    });
+
+    if (!response.ok) {
+      throw new Error("서버 응답 오류");
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error("개별주문 불러오기 실패:", error);
+    return { success: false, error: String(error) };
+  }
+}

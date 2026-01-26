@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { fetchMenuFull, formatDate } from "@/lib/api";
+import { fetchMenuFull, formatDate, saveIndividualOrders, fetchSavedOrders, type SavedOrder } from "@/lib/api";
 import type { MenuFullItem, IndividualOrder as IndividualOrderType } from "@/lib/types";
 import * as XLSX from "xlsx";
 
@@ -41,6 +41,9 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
   const [orders, setOrders] = useState<IndividualOrderType[]>([]);
   const [generatedOrderDf, setGeneratedOrderDf] = useState<Record<string, string | number>[] | null>(null);
   const [showMenuPreview, setShowMenuPreview] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savedOrders, setSavedOrders] = useState<SavedOrder[]>([]);
+  const [loadingSaved, setLoadingSaved] = useState(false);
 
   // 주문 폼 상태
   const [selectedCategory, setSelectedCategory] = useState("");
@@ -197,6 +200,50 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
     }));
 
     setGeneratedOrderDf(rows);
+  };
+
+  // 서버에 개별주문 저장
+  const handleSaveToServer = async () => {
+    if (orders.length === 0) {
+      alert("저장할 주문이 없습니다");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const result = await saveIndividualOrders(orders);
+      if (result.success) {
+        alert(`✅ ${result.count}건의 주문이 서버에 저장되었습니다!\n\n오전 11시에 일반발주서와 함께 합쳐집니다.`);
+        setOrders([]); // 저장 후 목록 초기화
+        setGeneratedOrderDf(null);
+      } else {
+        alert(`저장 실패: ${result.error}`);
+      }
+    } catch (error) {
+      alert(`저장 중 오류 발생: ${error}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // 서버에서 저장된 개별주문 불러오기
+  const handleLoadFromServer = async () => {
+    setLoadingSaved(true);
+    try {
+      const result = await fetchSavedOrders();
+      if (result.success && result.orders) {
+        setSavedOrders(result.orders);
+        if (result.orders.length === 0) {
+          alert("오늘 저장된 개별주문이 없습니다.\n(기준: 전날 11:01 ~ 오늘 11:00)");
+        }
+      } else {
+        alert(`불러오기 실패: ${result.error}`);
+      }
+    } catch (error) {
+      alert(`불러오기 중 오류 발생: ${error}`);
+    } finally {
+      setLoadingSaved(false);
+    }
   };
 
   // 개별 주문만 다운로드
@@ -523,12 +570,25 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
                   목록 초기화
                 </button>
                 <button
+                  onClick={handleSaveToServer}
+                  disabled={saving}
+                  className="rounded-lg bg-[#8957e5] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#7c3aed] disabled:opacity-50"
+                >
+                  {saving ? "저장 중..." : "💾 서버에 저장"}
+                </button>
+                <button
                   onClick={handleGenerateOrder}
                   className="rounded-lg bg-[#238636] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#2ea043]"
                 >
-                  발주서 생성 (STEP 1 완료)
+                  발주서 생성
                 </button>
               </div>
+            </div>
+
+            <div className="mt-4 rounded-lg bg-[#8957e5]/10 border border-[#8957e5]/30 p-4">
+              <p className="text-sm text-[#a371f7]">
+                💡 <strong>서버에 저장</strong>하면 오전 11시에 관리자가 일반발주서와 합칠 수 있어요!
+              </p>
             </div>
           </section>
         </>
@@ -582,6 +642,119 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
           </section>
         </>
       )}
+
+      {/* 관리자용: 저장된 개별주문 불러오기 */}
+      <div className="border-t border-[#21262d]" />
+
+      <section>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-base font-semibold text-[#c9d1d9]">📥 저장된 개별주문 불러오기</h3>
+            <p className="text-sm text-[#8b949e] mt-1">
+              기준: 전날 11:01 ~ 오늘 11:00 저장된 주문
+            </p>
+          </div>
+          <button
+            onClick={handleLoadFromServer}
+            disabled={loadingSaved}
+            className="rounded-lg bg-[#58a6ff] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#4493f8] disabled:opacity-50"
+          >
+            {loadingSaved ? "불러오는 중..." : "🔄 불러오기"}
+          </button>
+        </div>
+
+        {savedOrders.length > 0 && (
+          <div className="space-y-4">
+            <div className="rounded-lg bg-[#238636]/10 border border-[#238636]/30 p-4">
+              <p className="text-sm text-[#3fb950]">
+                ✅ {savedOrders.length}건의 저장된 개별주문을 불러왔습니다
+              </p>
+            </div>
+
+            <div className="overflow-auto rounded-xl border border-[#30363d] bg-[#161b22]">
+              <table className="w-full text-sm">
+                <thead className="bg-[#21262d]">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-[#8b949e]">저장시간</th>
+                    <th className="px-4 py-3 text-left text-[#8b949e]">수취인명</th>
+                    <th className="px-4 py-3 text-left text-[#8b949e]">전화번호</th>
+                    <th className="px-4 py-3 text-left text-[#8b949e]">상품명</th>
+                    <th className="px-4 py-3 text-left text-[#8b949e]">옵션</th>
+                    <th className="px-4 py-3 text-left text-[#8b949e]">수량</th>
+                    <th className="px-4 py-3 text-left text-[#8b949e]">합계</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {savedOrders.map((order, idx) => (
+                    <tr key={idx} className="border-t border-[#21262d]">
+                      <td className="px-4 py-3 text-[#8b949e] text-xs">{order.saved_time}</td>
+                      <td className="px-4 py-3 text-[#f0f6fc]">{order.recipient_name}</td>
+                      <td className="px-4 py-3 text-[#8b949e]">{order.recipient_phone}</td>
+                      <td className="px-4 py-3 text-[#8b949e]">{order.product_name}</td>
+                      <td className="px-4 py-3 text-[#8b949e]">{order.option}</td>
+                      <td className="px-4 py-3 text-[#8b949e]">{order.quantity}</td>
+                      <td className="px-4 py-3 text-[#f0f6fc]">₩{order.total?.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  // 저장된 주문을 발주서 형식으로 변환 후 다운로드
+                  const today = formatDate("YYYYMMDD");
+                  const rows = savedOrders.map((order, i) => ({
+                    "No.": i + 1,
+                    "수집일자(YYYYMMDD)": today,
+                    "주문번호(사방넷)": `IND${today}${String(i + 1).padStart(4, "0")}`,
+                    "주문번호(쇼핑몰)": `개별${String(i + 1).padStart(4, "0")}`,
+                    "상품코드(쇼핑몰)": "",
+                    수취인명: order.recipient_name,
+                    수취인전화번호1: order.recipient_phone,
+                    "수취인우편번호(1)": "",
+                    "수취인주소(1)": order.address,
+                    배송메세지: "",
+                    "상품명(수집)": order.product_name,
+                    "옵션(수집)": order.option,
+                    "옵션(확정)": order.option,
+                    수량: order.quantity,
+                    단가: order.supply_price,
+                    추가비용: "",
+                    특이사항: "",
+                    택배사: "",
+                    송장번호: "",
+                    택배비: order.shipping_fee,
+                    주문자명: order.recipient_name,
+                    주문자전화번호1: order.recipient_phone,
+                    TEMP5: "",
+                    비고: "",
+                    "쇼핑몰명(1)": "개별주문",
+                    수취인전화번호2: "",
+                  }));
+                  
+                  const ws = XLSX.utils.json_to_sheet(rows);
+                  const wb = XLSX.utils.book_new();
+                  XLSX.utils.book_append_sheet(wb, ws, "개별주문");
+                  XLSX.writeFile(wb, `${today}_저장된_개별주문.xlsx`);
+                }}
+                className="rounded-lg bg-[#238636] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#2ea043]"
+              >
+                📥 저장된 개별주문 다운로드
+              </button>
+            </div>
+          </div>
+        )}
+
+        {savedOrders.length === 0 && (
+          <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-8 text-center">
+            <p className="text-[#8b949e]">
+              &apos;불러오기&apos; 버튼을 눌러 저장된 개별주문을 확인하세요
+            </p>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

@@ -7,6 +7,9 @@ export const CONFIG = {
 
   // Kakao API
   KAKAO_API_KEY: "bd2c82b2e6e073ce3c2268b0c6f87025",
+
+  // Google Apps Script (개별주문 저장)
+  APPS_SCRIPT_URL: "https://script.google.com/macros/s/AKfycbzFhw9IG_3aHpGCva2kc2KmNxsufgH0xc3ZZxSDk_L93JT5HFtAlGK-MIHHnt3r9oeO/exec",
 } as const;
 
 // Google Sheets URL 생성
