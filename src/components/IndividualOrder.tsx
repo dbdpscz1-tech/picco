@@ -202,10 +202,10 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
     setGeneratedOrderDf(rows);
   };
 
-  // 서버에 개별주문 저장
+  // 서버에 개별주문 저장 (주문확정)
   const handleSaveToServer = async () => {
     if (orders.length === 0) {
-      alert("저장할 주문이 없습니다");
+      alert("확정할 주문이 없습니다");
       return;
     }
 
@@ -213,14 +213,14 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
     try {
       const result = await saveIndividualOrders(orders);
       if (result.success) {
-        alert(`✅ ${result.count}건의 주문이 서버에 저장되었습니다!\n\n오전 11시에 일반발주서와 함께 합쳐집니다.`);
+        alert(`✅ ${result.count}건의 주문이 확정되었습니다!\n\n📌 입금 안내\n하나은행 219-910038-71104 (피코)\n\n❗ 수령인 = 입금자명 일치 필요\n입금 완료 후 발주가 진행됩니다.`);
         setOrders([]); // 저장 후 목록 초기화
         setGeneratedOrderDf(null);
       } else {
-        alert(`저장 실패: ${result.error}`);
+        alert(`주문 확정 실패: ${result.error}`);
       }
     } catch (error) {
-      alert(`저장 중 오류 발생: ${error}`);
+      alert(`주문 확정 중 오류 발생: ${error}`);
     } finally {
       setSaving(false);
     }
@@ -571,23 +571,32 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
                 <button
                   onClick={handleSaveToServer}
                   disabled={saving}
-                  className="rounded-lg bg-[#8957e5] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#7c3aed] disabled:opacity-50"
+                  className="rounded-lg bg-[#238636] px-6 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#2ea043] disabled:opacity-50"
                 >
-                  {saving ? "저장 중..." : "💾 서버에 저장"}
-                </button>
-                <button
-                  onClick={handleGenerateOrder}
-                  className="rounded-lg bg-[#238636] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#2ea043]"
-                >
-                  발주서 생성
+                  {saving ? "처리 중..." : "✅ 주문확정하기"}
                 </button>
               </div>
             </div>
 
-            <div className="mt-4 rounded-lg bg-[#8957e5]/10 border border-[#8957e5]/30 p-4">
-              <p className="text-sm text-[#a371f7]">
-                💡 <strong>서버에 저장</strong>하면 오전 11시에 관리자가 일반발주서와 합칠 수 있어요!
-              </p>
+            {/* 입금 안내 */}
+            <div className="mt-4 rounded-xl border-2 border-[#f78166] bg-[#f78166]/10 p-5">
+              <div className="flex items-start gap-3">
+                <span className="text-2xl">🏦</span>
+                <div>
+                  <p className="font-bold text-[#f78166] text-base mb-2">
+                    ⚠️ 주문 후 입금해야 발주됩니다!
+                  </p>
+                  <div className="bg-[#21262d] rounded-lg p-3 mb-3">
+                    <p className="text-[#f0f6fc] font-mono text-lg font-bold">
+                      하나은행 219-910038-71104
+                    </p>
+                    <p className="text-[#8b949e] text-sm mt-1">예금주: 피코</p>
+                  </div>
+                  <p className="text-[#f0883e] text-sm font-medium">
+                    ❗ 수령인 = 입금자명 일치 필요
+                  </p>
+                </div>
+              </div>
             </div>
           </section>
         </>

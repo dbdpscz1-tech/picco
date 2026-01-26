@@ -23,7 +23,7 @@ export default function Dashboard({
   const [loadingKPI, setLoadingKPI] = useState(false);
   const [loadingMenu, setLoadingMenu] = useState(false);
   const [showMenuList, setShowMenuList] = useState(false);
-  const [showDailySales, setShowDailySales] = useState(true);
+  const [showDailySalesDetail, setShowDailySalesDetail] = useState(false);
   const [showSalesCount, setShowSalesCount] = useState(true);
   const [showRevenue, setShowRevenue] = useState(true);
   const [showChannels, setShowChannels] = useState(false);
@@ -44,6 +44,23 @@ export default function Dashboard({
         0
       )
     : 0;
+
+  // 일일판매수에서 오늘/어제 데이터 추출
+  const getTodaySales = () => {
+    if (!kpiData?.dailySales || kpiData.dailySales.length < 2) return null;
+    // 첫 번째 행은 헤더, 두 번째 행이 가장 최근 데이터
+    const todayRow = kpiData.dailySales[1];
+    if (todayRow && todayRow.length >= 3) {
+      return {
+        date: todayRow[0] || "오늘",
+        count: todayRow[1] || "0",
+        amount: todayRow[2] || "0",
+      };
+    }
+    return null;
+  };
+
+  const todaySales = getTodaySales();
 
   const handleRefreshKPI = async () => {
     setLoadingKPI(true);
@@ -89,28 +106,49 @@ export default function Dashboard({
 
         {kpiData ? (
           <div className="space-y-6">
-            {/* 1-1. 일일판매수 (S4:U30) */}
-            <div className="rounded-xl border border-[#30363d] bg-[#161b22] overflow-hidden">
-              <button
-                onClick={() => setShowDailySales(!showDailySales)}
-                className="w-full px-5 py-4 flex items-center justify-between bg-[#21262d] hover:bg-[#30363d] transition-colors"
-              >
-                <h3 className="text-base font-semibold text-[#f0f6fc]">📊 일일판매수</h3>
-                <span className="text-[#8b949e]">{showDailySales ? "▼" : "▶"}</span>
-              </button>
-              {showDailySales && kpiData.dailySales.length > 0 && (
-                <div className="p-4 overflow-x-auto">
-                  <table className="w-full text-sm">
+            {/* 일일판매수 - 카드 + 상세 테이블 */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {/* 오늘 판매 카드 */}
+              <div className="lg:col-span-1">
+                <div className="grid grid-cols-2 gap-3">
+                  {todaySales && (
+                    <>
+                      <div className="rounded-xl border border-[#30363d] bg-[#161b22] p-4">
+                        <p className="text-xs text-[#8b949e]">📅 {todaySales.date}</p>
+                        <p className="mt-1 text-2xl font-bold text-[#58a6ff]">{todaySales.count}</p>
+                        <p className="text-xs text-[#8b949e]">판매 건수</p>
+                      </div>
+                      <div className="rounded-xl border border-[#30363d] bg-[#161b22] p-4">
+                        <p className="text-xs text-[#8b949e]">💰 매출</p>
+                        <p className="mt-1 text-2xl font-bold text-[#3fb950]">{todaySales.amount}</p>
+                        <p className="text-xs text-[#8b949e]">원</p>
+                      </div>
+                    </>
+                  )}
+                </div>
+                <button
+                  onClick={() => setShowDailySalesDetail(!showDailySalesDetail)}
+                  className="mt-3 text-xs text-[#58a6ff] hover:underline"
+                >
+                  {showDailySalesDetail ? "▼ 일일판매수 상세 닫기" : "▶ 일일판매수 상세 보기"}
+                </button>
+              </div>
+
+              {/* 일일판매수 상세 테이블 (참고용) */}
+              {showDailySalesDetail && (
+                <div className="lg:col-span-2 rounded-xl border border-[#30363d] bg-[#161b22] p-4 overflow-x-auto max-h-[300px] overflow-y-auto">
+                  <h4 className="text-sm font-medium text-[#8b949e] mb-3">📊 일일판매수 상세</h4>
+                  <table className="w-full text-xs">
                     <tbody>
                       {kpiData.dailySales.map((row, idx) => (
                         <tr key={idx} className={idx > 0 ? "border-t border-[#21262d]" : ""}>
                           {row.map((cell, cellIdx) => (
                             <td
                               key={cellIdx}
-                              className={`px-4 py-2 ${
+                              className={`px-2 py-1.5 ${
                                 idx === 0
                                   ? "font-semibold text-[#58a6ff] bg-[#21262d]"
-                                  : "text-[#f0f6fc]"
+                                  : "text-[#c9d1d9]"
                               }`}
                             >
                               {cell}
@@ -212,7 +250,6 @@ export default function Dashboard({
                   <table className="w-full text-sm">
                     <tbody>
                       {kpiData.channels.map((row, idx) => {
-                        // 빈 행 스킵
                         if (row.every((cell) => !cell || cell.trim() === "")) return null;
                         return (
                           <tr key={idx} className={idx > 0 ? "border-t border-[#21262d]" : ""}>
