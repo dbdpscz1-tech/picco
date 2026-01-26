@@ -1,9 +1,35 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { fetchMenuFull, searchAddressKakao, searchKeywordKakao, formatDate } from "@/lib/api";
+import { useState, useRef, useEffect } from "react";
+import { fetchMenuFull, formatDate } from "@/lib/api";
 import type { MenuFullItem, IndividualOrder as IndividualOrderType } from "@/lib/types";
 import * as XLSX from "xlsx";
+
+// 다음 우편번호 타입 선언
+declare global {
+  interface Window {
+    daum: {
+      Postcode: new (config: {
+        oncomplete: (data: DaumPostcodeData) => void;
+        onclose?: () => void;
+        width?: string | number;
+        height?: string | number;
+      }) => { open: () => void };
+    };
+  }
+}
+
+interface DaumPostcodeData {
+  address: string;
+  addressType: string;
+  bname: string;
+  buildingName: string;
+  zonecode: string;
+  roadAddress: string;
+  jibunAddress: string;
+  autoRoadAddress: string;
+  autoJibunAddress: string;
+}
 
 interface IndividualOrderProps {
   menuFull: MenuFullItem[];
@@ -22,14 +48,26 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
   const [quantity, setQuantity] = useState(1);
   const [recipientName, setRecipientName] = useState("");
   const [recipientPhone, setRecipientPhone] = useState("");
-  const [addressQuery, setAddressQuery] = useState("");
-  const [addressResults, setAddressResults] = useState<string[]>([]);
-  const [selectedAddress, setSelectedAddress] = useState("");
   const [address, setAddress] = useState("");
+  const [addressDetail, setAddressDetail] = useState("");
+  const [zonecode, setZonecode] = useState("");
   const [currentSupplyPrice, setCurrentSupplyPrice] = useState(0);
   const [currentShippingFee, setCurrentShippingFee] = useState(0);
+  const [isPostcodeLoaded, setIsPostcodeLoaded] = useState(false);
 
   const mergeFileRef = useRef<HTMLInputElement>(null);
+
+  // 다음 우편번호 스크립트 로드 확인
+  useEffect(() => {
+    const checkPostcode = () => {
+      if (window.daum && window.daum.Postcode) {
+        setIsPostcodeLoaded(true);
+      } else {
+        setTimeout(checkPostcode, 100);
+      }
+    };
+    checkPostcode();
+  }, []);
 
   // 메뉴판 로드
   const handleLoadMenu = async () => {
@@ -64,21 +102,28 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
     }
   };
 
-  // 주소 검색
-  const handleSearchAddress = async () => {
-    if (!addressQuery.trim()) return;
+  // 다음 우편번호 팝업 열기
+  const openAddressPopup = () => {
+    if (!isPostcodeLoaded) {
+      alert("주소 검색 서비스를 불러오는 중입니다. 잠시 후 다시 시도해주세요.");
+      return;
+    }
 
-    const addrResults = await searchAddressKakao(addressQuery);
-    const keywordResults = await searchKeywordKakao(addressQuery);
+    new window.daum.Postcode({
+      oncomplete: (data: DaumPostcodeData) => {
+        // 도로명 주소 우선, 없으면 지번 주소
+        let fullAddress = data.roadAddress || data.jibunAddress || data.address;
+        
+        // 건물명이 있으면 추가
+        if (data.buildingName) {
+          fullAddress += ` (${data.buildingName})`;
+        }
 
-    const allResults = [...new Set([...addrResults, ...keywordResults])];
-    setAddressResults(allResults);
-  };
-
-  // 주소 선택
-  const handleSelectAddress = (addr: string) => {
-    setSelectedAddress(addr);
-    setAddress(addr);
+        setAddress(fullAddress);
+        setZonecode(data.zonecode);
+        setAddressDetail(""); // 상세주소 초기화
+      },
+    }).open();
   };
 
   // 주문 추가
@@ -88,10 +133,13 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
       return;
     }
 
+    // 전체 주소 (기본주소 + 상세주소)
+    const fullAddress = addressDetail ? `${address} ${addressDetail}` : address;
+
     const newOrder: IndividualOrderType = {
       recipient_name: recipientName,
       recipient_phone: recipientPhone,
-      address,
+      address: fullAddress,
       product_name: selectedCategory || "",
       option: selectedOption || "",
       quantity,
@@ -105,9 +153,8 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
     setRecipientName("");
     setRecipientPhone("");
     setAddress("");
-    setAddressQuery("");
-    setAddressResults([]);
-    setSelectedAddress("");
+    setAddressDetail("");
+    setZonecode("");
     setQuantity(1);
   };
 
@@ -366,54 +413,51 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
 
           {/* 주소 검색 */}
           <div>
-            <label className="mb-1 block text-sm text-[#8b949e]">주소 검색</label>
+            <label className="mb-1 block text-sm text-[#8b949e]">배송 주소</label>
             <div className="flex gap-2">
               <input
                 type="text"
-                value={addressQuery}
-                onChange={(e) => setAddressQuery(e.target.value)}
-                placeholder="주소나 장소명 입력 후 검색 버튼 클릭"
-                className="flex-1 rounded-lg border border-[#30363d] bg-[#0d1117] px-3 py-2 text-sm text-[#f0f6fc] focus:border-[#58a6ff] focus:outline-none"
+                value={zonecode}
+                readOnly
+                placeholder="우편번호"
+                className="w-28 rounded-lg border border-[#30363d] bg-[#0d1117] px-3 py-2 text-sm text-[#f0f6fc] focus:outline-none"
               />
               <button
-                onClick={handleSearchAddress}
-                className="rounded-lg border border-[#30363d] bg-[#21262d] px-4 py-2 text-sm text-[#c9d1d9] transition-colors hover:border-[#8b949e]"
+                onClick={openAddressPopup}
+                className="rounded-lg bg-[#238636] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#2ea043]"
               >
-                🔍 검색
+                🔍 주소 검색
               </button>
             </div>
           </div>
 
-          {/* 주소 검색 결과 */}
-          {addressResults.length > 0 && (
+          {/* 기본 주소 */}
+          {address && (
             <div>
-              <label className="mb-1 block text-sm text-[#8b949e]">검색 결과 선택</label>
-              <select
-                value={selectedAddress}
-                onChange={(e) => handleSelectAddress(e.target.value)}
-                className="w-full rounded-lg border border-[#30363d] bg-[#0d1117] px-3 py-2 text-sm text-[#f0f6fc] focus:border-[#58a6ff] focus:outline-none"
-              >
-                <option value="">선택하세요</option>
-                {addressResults.map((addr, idx) => (
-                  <option key={idx} value={addr}>
-                    {addr}
-                  </option>
-                ))}
-              </select>
+              <label className="mb-1 block text-sm text-[#8b949e]">기본 주소</label>
+              <input
+                type="text"
+                value={address}
+                readOnly
+                className="w-full rounded-lg border border-[#30363d] bg-[#21262d] px-3 py-2 text-sm text-[#f0f6fc] focus:outline-none"
+              />
+            </div>
             </div>
           )}
 
-          {/* 배송 주소 */}
-          <div>
-            <label className="mb-1 block text-sm text-[#8b949e]">배송주소</label>
-            <input
-              type="text"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="직접 입력 또는 위에서 검색"
-              className="w-full rounded-lg border border-[#30363d] bg-[#0d1117] px-3 py-2 text-sm text-[#f0f6fc] focus:border-[#58a6ff] focus:outline-none"
-            />
-          </div>
+          {/* 상세 주소 */}
+          {address && (
+            <div>
+              <label className="mb-1 block text-sm text-[#8b949e]">상세 주소</label>
+              <input
+                type="text"
+                value={addressDetail}
+                onChange={(e) => setAddressDetail(e.target.value)}
+                placeholder="동/호수 등 상세주소 입력"
+                className="w-full rounded-lg border border-[#30363d] bg-[#0d1117] px-3 py-2 text-sm text-[#f0f6fc] focus:border-[#58a6ff] focus:outline-none"
+              />
+            </div>
+          )}
 
           {/* 주문 추가 버튼 */}
           <button
