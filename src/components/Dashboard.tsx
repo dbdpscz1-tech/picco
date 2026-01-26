@@ -1,114 +1,276 @@
-export default function Dashboard() {
-  const stats = [
-    { label: "총 프로젝트", value: "12", change: "+2" },
-    { label: "진행 중", value: "5", change: "+1" },
-    { label: "완료", value: "7", change: "+1" },
-    { label: "팀원", value: "8", change: "0" },
-  ];
+"use client";
 
-  const recentProjects = [
-    { name: "웹 리디자인", status: "진행 중", progress: 65, date: "2026-01-22" },
-    { name: "모바일 앱 개발", status: "진행 중", progress: 40, date: "2026-01-20" },
-    { name: "API 서버 구축", status: "완료", progress: 100, date: "2026-01-18" },
-    { name: "데이터베이스 마이그레이션", status: "대기", progress: 0, date: "2026-01-15" },
-  ];
+import { useState } from "react";
+import { fetchMenuFromGoogleSheets, fetchOrderHistory, formatDate } from "@/lib/api";
+import type { MenuDict, ProcessedResults, OrderHistory } from "@/lib/types";
+
+interface DashboardProps {
+  menuData: MenuDict;
+  setMenuData: (data: MenuDict) => void;
+  menuLoaded: boolean;
+  setMenuLoaded: (loaded: boolean) => void;
+  processedResults: ProcessedResults | null;
+}
+
+export default function Dashboard({
+  menuData,
+  setMenuData,
+  menuLoaded,
+  setMenuLoaded,
+  processedResults,
+}: DashboardProps) {
+  const [orderHistory, setOrderHistory] = useState<OrderHistory[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [loadingMenu, setLoadingMenu] = useState(false);
+  const [showMenuList, setShowMenuList] = useState(false);
+
+  // KPI 계산
+  const today = formatDate("YYYYMMDD");
+  const thisMonth = formatDate("YYYYMM");
+
+  const todayOrders = orderHistory.filter((o) => String(o.발주일) === today);
+  const monthOrders = orderHistory.filter((o) => String(o.월) === thisMonth);
+
+  const todayCount = todayOrders.length;
+  const todayQty = todayOrders.reduce((sum, o) => sum + (o.수량 || 0), 0);
+  const monthCount = monthOrders.length || orderHistory.length;
+  const monthQty = monthOrders.reduce((sum, o) => sum + (o.수량 || 0), 0) || 
+    orderHistory.reduce((sum, o) => sum + (o.수량 || 0), 0);
+
+  // 브랜드별 통계
+  const brandStats: Record<string, { count: number; qty: number }> = {};
+  orderHistory.forEach((o) => {
+    const brand = o.브랜드 || "기타";
+    if (!brandStats[brand]) brandStats[brand] = { count: 0, qty: 0 };
+    brandStats[brand].count++;
+    brandStats[brand].qty += o.수량 || 0;
+  });
+
+  // 메뉴판 브랜드별 카운트
+  const menuBrandCounts: Record<string, number> = {};
+  Object.values(menuData).forEach((brand) => {
+    menuBrandCounts[brand] = (menuBrandCounts[brand] || 0) + 1;
+  });
+
+  // 발주 현황 (분리 작업 결과)
+  const processedTotal = processedResults
+    ? Object.values(processedResults).reduce((sum, orders) => sum + orders.length, 0)
+    : 0;
+  const processedQty = processedResults
+    ? Object.values(processedResults).reduce(
+        (sum, orders) => sum + orders.reduce((s, o) => s + o.qty, 0),
+        0
+      )
+    : 0;
+
+  const handleRefreshHistory = async () => {
+    setLoadingHistory(true);
+    try {
+      const data = await fetchOrderHistory();
+      setOrderHistory(data);
+    } catch (error) {
+      console.error("데이터 로드 실패:", error);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const handleRefreshMenu = async () => {
+    setLoadingMenu(true);
+    try {
+      const menu = await fetchMenuFromGoogleSheets();
+      if (Object.keys(menu).length > 0) {
+        setMenuData(menu);
+        setMenuLoaded(true);
+      }
+    } catch (error) {
+      console.error("메뉴판 로드 실패:", error);
+    } finally {
+      setLoadingMenu(false);
+    }
+  };
 
   return (
     <div className="space-y-8">
-      {/* Stats Grid */}
+      {/* KPI 섹션 */}
       <section>
-        <h2 className="mb-4 text-lg font-semibold text-[#c9d1d9]">개요</h2>
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          {stats.map((stat) => (
-            <div
-              key={stat.label}
-              className="rounded-xl border border-[#30363d] bg-[#161b22] p-5 transition-all hover:border-[#58a6ff]/50"
-            >
-              <p className="text-sm text-[#8b949e]">{stat.label}</p>
-              <p className="mt-2 text-3xl font-bold text-[#f0f6fc]">{stat.value}</p>
-              <p
-                className={`mt-1 text-xs ${
-                  stat.change.startsWith("+") && stat.change !== "+0"
-                    ? "text-[#3fb950]"
-                    : "text-[#8b949e]"
-                }`}
-              >
-                {stat.change !== "0" ? `${stat.change} 이번 주` : "변동 없음"}
-              </p>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-[#c9d1d9]">📈 판매 현황 (KPI)</h2>
+          <button
+            onClick={handleRefreshHistory}
+            disabled={loadingHistory}
+            className="rounded-lg border border-[#30363d] bg-[#21262d] px-4 py-2 text-sm font-medium text-[#c9d1d9] transition-colors hover:border-[#8b949e] disabled:opacity-50"
+          >
+            {loadingHistory ? "로드 중..." : "데이터 새로고침"}
+          </button>
+        </div>
+
+        {orderHistory.length > 0 ? (
+          <>
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+              <StatCard label="오늘 주문" value={`${todayCount}건`} />
+              <StatCard label="오늘 판매수량" value={`${todayQty}개`} />
+              <StatCard label="이번달 주문" value={`${monthCount}건`} />
+              <StatCard label="이번달 판매수량" value={`${monthQty}개`} />
             </div>
-          ))}
-        </div>
-      </section>
 
-      {/* Recent Projects */}
-      <section>
-        <h2 className="mb-4 text-lg font-semibold text-[#c9d1d9]">최근 프로젝트</h2>
-        <div className="overflow-hidden rounded-xl border border-[#30363d] bg-[#161b22]">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-[#30363d] text-left text-sm text-[#8b949e]">
-                <th className="px-5 py-3 font-medium">프로젝트</th>
-                <th className="px-5 py-3 font-medium">상태</th>
-                <th className="px-5 py-3 font-medium">진행률</th>
-                <th className="px-5 py-3 font-medium">날짜</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentProjects.map((project, idx) => (
-                <tr
-                  key={project.name}
-                  className={`text-sm transition-colors hover:bg-[#21262d] ${
-                    idx !== recentProjects.length - 1 ? "border-b border-[#21262d]" : ""
-                  }`}
-                >
-                  <td className="px-5 py-4 font-medium text-[#f0f6fc]">{project.name}</td>
-                  <td className="px-5 py-4">
-                    <span
-                      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
-                        project.status === "진행 중"
-                          ? "bg-[#388bfd]/20 text-[#58a6ff]"
-                          : project.status === "완료"
-                          ? "bg-[#238636]/20 text-[#3fb950]"
-                          : "bg-[#6e7681]/20 text-[#8b949e]"
-                      }`}
-                    >
-                      {project.status}
-                    </span>
-                  </td>
-                  <td className="px-5 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="h-2 w-24 overflow-hidden rounded-full bg-[#30363d]">
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-[#58a6ff] to-[#a371f7]"
-                          style={{ width: `${project.progress}%` }}
-                        />
+            {Object.keys(brandStats).length > 0 && (
+              <div className="mt-6">
+                <h3 className="mb-3 text-sm font-medium text-[#8b949e]">브랜드별 현황</h3>
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
+                  {Object.entries(brandStats)
+                    .sort((a, b) => b[1].count - a[1].count)
+                    .slice(0, 6)
+                    .map(([brand, stats]) => (
+                      <div
+                        key={brand}
+                        className="rounded-lg border border-[#30363d] bg-[#161b22] p-3"
+                      >
+                        <p className="text-xs text-[#8b949e]">{brand}</p>
+                        <p className="text-lg font-bold text-[#f0f6fc]">{stats.count}건</p>
                       </div>
-                      <span className="text-[#8b949e]">{project.progress}%</span>
-                    </div>
-                  </td>
-                  <td className="px-5 py-4 text-[#8b949e]">{project.date}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                    ))}
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="rounded-xl border border-[#30363d] bg-[#161b22] p-8 text-center">
+            <p className="text-[#8b949e]">
+              &apos;데이터 새로고침&apos; 버튼을 눌러 통합 발주서에서 KPI 데이터를 불러오세요
+            </p>
+          </div>
+        )}
       </section>
 
-      {/* Quick Actions */}
+      <div className="border-t border-[#21262d]" />
+
+      {/* 메뉴판 관리 섹션 */}
       <section>
-        <h2 className="mb-4 text-lg font-semibold text-[#c9d1d9]">빠른 작업</h2>
-        <div className="flex flex-wrap gap-3">
-          <button className="rounded-lg bg-[#238636] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#2ea043]">
-            + 새 프로젝트
-          </button>
-          <button className="rounded-lg border border-[#30363d] bg-[#21262d] px-4 py-2.5 text-sm font-medium text-[#c9d1d9] transition-colors hover:border-[#8b949e]">
-            팀원 초대
-          </button>
-          <button className="rounded-lg border border-[#30363d] bg-[#21262d] px-4 py-2.5 text-sm font-medium text-[#c9d1d9] transition-colors hover:border-[#8b949e]">
-            리포트 생성
+        <h2 className="mb-4 text-lg font-semibold text-[#c9d1d9]">📋 메뉴판 관리</h2>
+        <div className="flex items-center justify-between">
+          <div>
+            {menuLoaded && Object.keys(menuData).length > 0 ? (
+              <p className="text-sm text-[#3fb950]">
+                ✅ 메뉴판 로드됨: {Object.keys(menuData).length}개 상품
+              </p>
+            ) : (
+              <p className="text-sm text-[#f0883e]">⚠️ 메뉴판을 로드해주세요</p>
+            )}
+          </div>
+          <button
+            onClick={handleRefreshMenu}
+            disabled={loadingMenu}
+            className="rounded-lg border border-[#30363d] bg-[#21262d] px-4 py-2 text-sm font-medium text-[#c9d1d9] transition-colors hover:border-[#8b949e] disabled:opacity-50"
+          >
+            {loadingMenu ? "로드 중..." : "메뉴판 새로고침"}
           </button>
         </div>
+
+        {Object.keys(menuBrandCounts).length > 0 && (
+          <>
+            <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-6">
+              {Object.entries(menuBrandCounts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 6)
+                .map(([brand, count]) => (
+                  <div
+                    key={brand}
+                    className="rounded-lg border border-[#30363d] bg-[#161b22] p-3"
+                  >
+                    <p className="text-xs text-[#8b949e]">{brand}</p>
+                    <p className="text-lg font-bold text-[#f0f6fc]">{count}개 상품</p>
+                  </div>
+                ))}
+            </div>
+
+            <div className="mt-4">
+              <button
+                onClick={() => setShowMenuList(!showMenuList)}
+                className="text-sm text-[#58a6ff] hover:underline"
+              >
+                {showMenuList ? "▼ 전체 상품 목록 닫기" : "▶ 전체 상품 목록 보기"}
+              </button>
+
+              {showMenuList && (
+                <div className="mt-3 max-h-96 overflow-auto rounded-xl border border-[#30363d] bg-[#161b22]">
+                  <table className="w-full text-sm">
+                    <thead className="sticky top-0 bg-[#21262d]">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-[#8b949e]">옵션명</th>
+                        <th className="px-4 py-2 text-left text-[#8b949e]">브랜드</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(menuData).map(([option, brand], idx) => (
+                        <tr
+                          key={idx}
+                          className="border-t border-[#21262d] hover:bg-[#21262d]"
+                        >
+                          <td className="px-4 py-2 text-[#f0f6fc]">{option}</td>
+                          <td className="px-4 py-2 text-[#8b949e]">{brand}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </section>
+
+      {/* 오늘 발주 현황 (분리 작업 결과) */}
+      {processedResults && Object.keys(processedResults).length > 0 && (
+        <>
+          <div className="border-t border-[#21262d]" />
+          <section>
+            <h2 className="mb-4 text-lg font-semibold text-[#c9d1d9]">
+              📦 오늘 발주 현황 (분리 작업 결과)
+            </h2>
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+              <StatCard label="총 주문" value={`${processedTotal}건`} />
+              <StatCard label="총 수량" value={`${processedQty}개`} />
+              <StatCard label="발주처" value={`${Object.keys(processedResults).length}곳`} />
+              <StatCard
+                label={processedResults["미분류"]?.length ? "미분류" : "상태"}
+                value={
+                  processedResults["미분류"]?.length
+                    ? `${processedResults["미분류"].length}건`
+                    : "분류완료"
+                }
+                highlight={!!processedResults["미분류"]?.length}
+              />
+            </div>
+          </section>
+        </>
+      )}
+    </div>
+  );
+}
+
+// 통계 카드 컴포넌트
+function StatCard({
+  label,
+  value,
+  highlight = false,
+}: {
+  label: string;
+  value: string;
+  highlight?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-xl border p-5 transition-all hover:border-[#58a6ff]/50 ${
+        highlight
+          ? "border-[#f0883e] bg-[#f0883e]/10"
+          : "border-[#30363d] bg-[#161b22]"
+      }`}
+    >
+      <p className="text-sm text-[#8b949e]">{label}</p>
+      <p className={`mt-2 text-3xl font-bold ${highlight ? "text-[#f0883e]" : "text-[#f0f6fc]"}`}>
+        {value}
+      </p>
     </div>
   );
 }

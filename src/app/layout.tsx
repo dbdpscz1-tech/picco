@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Picco Project",
-  description: "프로젝트 관리 대시보드",
+  title: "피코 커머스",
+  description: "피코 커머스 발주서 자동화 시스템",
 };
 
 export default function RootLayout({
