@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { fetchMenuFromGoogleSheets, fetchOrderHistory, formatDate } from "@/lib/api";
-import type { MenuDict, ProcessedResults, OrderHistory } from "@/lib/types";
+import { fetchMenuFromGoogleSheets, fetchKPIData, type KPIData } from "@/lib/api";
+import type { MenuDict, ProcessedResults } from "@/lib/types";
 
 interface DashboardProps {
   menuData: MenuDict;
@@ -19,32 +19,14 @@ export default function Dashboard({
   setMenuLoaded,
   processedResults,
 }: DashboardProps) {
-  const [orderHistory, setOrderHistory] = useState<OrderHistory[]>([]);
-  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [kpiData, setKpiData] = useState<KPIData | null>(null);
+  const [loadingKPI, setLoadingKPI] = useState(false);
   const [loadingMenu, setLoadingMenu] = useState(false);
   const [showMenuList, setShowMenuList] = useState(false);
-
-  // KPI 계산
-  const today = formatDate("YYYYMMDD");
-  const thisMonth = formatDate("YYYYMM");
-
-  const todayOrders = orderHistory.filter((o) => String(o.발주일) === today);
-  const monthOrders = orderHistory.filter((o) => String(o.월) === thisMonth);
-
-  const todayCount = todayOrders.length;
-  const todayQty = todayOrders.reduce((sum, o) => sum + (o.수량 || 0), 0);
-  const monthCount = monthOrders.length || orderHistory.length;
-  const monthQty = monthOrders.reduce((sum, o) => sum + (o.수량 || 0), 0) || 
-    orderHistory.reduce((sum, o) => sum + (o.수량 || 0), 0);
-
-  // 브랜드별 통계
-  const brandStats: Record<string, { count: number; qty: number }> = {};
-  orderHistory.forEach((o) => {
-    const brand = o.브랜드 || "기타";
-    if (!brandStats[brand]) brandStats[brand] = { count: 0, qty: 0 };
-    brandStats[brand].count++;
-    brandStats[brand].qty += o.수량 || 0;
-  });
+  const [showDailySales, setShowDailySales] = useState(true);
+  const [showSalesCount, setShowSalesCount] = useState(true);
+  const [showRevenue, setShowRevenue] = useState(true);
+  const [showChannels, setShowChannels] = useState(false);
 
   // 메뉴판 브랜드별 카운트
   const menuBrandCounts: Record<string, number> = {};
@@ -63,15 +45,15 @@ export default function Dashboard({
       )
     : 0;
 
-  const handleRefreshHistory = async () => {
-    setLoadingHistory(true);
+  const handleRefreshKPI = async () => {
+    setLoadingKPI(true);
     try {
-      const data = await fetchOrderHistory();
-      setOrderHistory(data);
+      const data = await fetchKPIData();
+      setKpiData(data);
     } catch (error) {
-      console.error("데이터 로드 실패:", error);
+      console.error("KPI 데이터 로드 실패:", error);
     } finally {
-      setLoadingHistory(false);
+      setLoadingKPI(false);
     }
   };
 
@@ -95,49 +77,172 @@ export default function Dashboard({
       {/* KPI 섹션 */}
       <section>
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-[#c9d1d9]">📈 판매 현황 (KPI)</h2>
+          <h2 className="text-lg font-semibold text-[#c9d1d9]">📈 2026 KPI 현황</h2>
           <button
-            onClick={handleRefreshHistory}
-            disabled={loadingHistory}
-            className="rounded-lg border border-[#30363d] bg-[#21262d] px-4 py-2 text-sm font-medium text-[#c9d1d9] transition-colors hover:border-[#8b949e] disabled:opacity-50"
+            onClick={handleRefreshKPI}
+            disabled={loadingKPI}
+            className="rounded-lg bg-[#238636] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#2ea043] disabled:opacity-50"
           >
-            {loadingHistory ? "로드 중..." : "데이터 새로고침"}
+            {loadingKPI ? "로드 중..." : "🔄 KPI 데이터 불러오기"}
           </button>
         </div>
 
-        {orderHistory.length > 0 ? (
-          <>
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-              <StatCard label="오늘 주문" value={`${todayCount}건`} />
-              <StatCard label="오늘 판매수량" value={`${todayQty}개`} />
-              <StatCard label="이번달 주문" value={`${monthCount}건`} />
-              <StatCard label="이번달 판매수량" value={`${monthQty}개`} />
+        {kpiData ? (
+          <div className="space-y-6">
+            {/* 1-1. 일일판매수 (S4:U30) */}
+            <div className="rounded-xl border border-[#30363d] bg-[#161b22] overflow-hidden">
+              <button
+                onClick={() => setShowDailySales(!showDailySales)}
+                className="w-full px-5 py-4 flex items-center justify-between bg-[#21262d] hover:bg-[#30363d] transition-colors"
+              >
+                <h3 className="text-base font-semibold text-[#f0f6fc]">📊 일일판매수</h3>
+                <span className="text-[#8b949e]">{showDailySales ? "▼" : "▶"}</span>
+              </button>
+              {showDailySales && kpiData.dailySales.length > 0 && (
+                <div className="p-4 overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <tbody>
+                      {kpiData.dailySales.map((row, idx) => (
+                        <tr key={idx} className={idx > 0 ? "border-t border-[#21262d]" : ""}>
+                          {row.map((cell, cellIdx) => (
+                            <td
+                              key={cellIdx}
+                              className={`px-4 py-2 ${
+                                idx === 0
+                                  ? "font-semibold text-[#58a6ff] bg-[#21262d]"
+                                  : "text-[#f0f6fc]"
+                              }`}
+                            >
+                              {cell}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
 
-            {Object.keys(brandStats).length > 0 && (
-              <div className="mt-6">
-                <h3 className="mb-3 text-sm font-medium text-[#8b949e]">브랜드별 현황</h3>
-                <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
-                  {Object.entries(brandStats)
-                    .sort((a, b) => b[1].count - a[1].count)
-                    .slice(0, 6)
-                    .map(([brand, stats]) => (
-                      <div
-                        key={brand}
-                        className="rounded-lg border border-[#30363d] bg-[#161b22] p-3"
-                      >
-                        <p className="text-xs text-[#8b949e]">{brand}</p>
-                        <p className="text-lg font-bold text-[#f0f6fc]">{stats.count}건</p>
-                      </div>
-                    ))}
+            {/* 1. 판매 수 (B4:P10) */}
+            <div className="rounded-xl border border-[#30363d] bg-[#161b22] overflow-hidden">
+              <button
+                onClick={() => setShowSalesCount(!showSalesCount)}
+                className="w-full px-5 py-4 flex items-center justify-between bg-[#21262d] hover:bg-[#30363d] transition-colors"
+              >
+                <h3 className="text-base font-semibold text-[#f0f6fc]">📦 판매 수</h3>
+                <span className="text-[#8b949e]">{showSalesCount ? "▼" : "▶"}</span>
+              </button>
+              {showSalesCount && kpiData.salesCount.length > 0 && (
+                <div className="p-4 overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <tbody>
+                      {kpiData.salesCount.map((row, idx) => (
+                        <tr key={idx} className={idx > 0 ? "border-t border-[#21262d]" : ""}>
+                          {row.map((cell, cellIdx) => (
+                            <td
+                              key={cellIdx}
+                              className={`px-3 py-2 whitespace-nowrap ${
+                                idx === 0
+                                  ? "font-semibold text-[#58a6ff] bg-[#21262d]"
+                                  : cellIdx === 0
+                                  ? "font-medium text-[#c9d1d9]"
+                                  : "text-[#f0f6fc]"
+                              }`}
+                            >
+                              {cell}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              </div>
-            )}
-          </>
+              )}
+            </div>
+
+            {/* 2. 매출 (B13:P17) */}
+            <div className="rounded-xl border border-[#30363d] bg-[#161b22] overflow-hidden">
+              <button
+                onClick={() => setShowRevenue(!showRevenue)}
+                className="w-full px-5 py-4 flex items-center justify-between bg-[#21262d] hover:bg-[#30363d] transition-colors"
+              >
+                <h3 className="text-base font-semibold text-[#f0f6fc]">💰 매출</h3>
+                <span className="text-[#8b949e]">{showRevenue ? "▼" : "▶"}</span>
+              </button>
+              {showRevenue && kpiData.revenue.length > 0 && (
+                <div className="p-4 overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <tbody>
+                      {kpiData.revenue.map((row, idx) => (
+                        <tr key={idx} className={idx > 0 ? "border-t border-[#21262d]" : ""}>
+                          {row.map((cell, cellIdx) => (
+                            <td
+                              key={cellIdx}
+                              className={`px-3 py-2 whitespace-nowrap ${
+                                idx === 0
+                                  ? "font-semibold text-[#3fb950] bg-[#21262d]"
+                                  : cellIdx === 0
+                                  ? "font-medium text-[#c9d1d9]"
+                                  : "text-[#f0f6fc]"
+                              }`}
+                            >
+                              {cell}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* 4. 채널별 (B45:P83) */}
+            <div className="rounded-xl border border-[#30363d] bg-[#161b22] overflow-hidden">
+              <button
+                onClick={() => setShowChannels(!showChannels)}
+                className="w-full px-5 py-4 flex items-center justify-between bg-[#21262d] hover:bg-[#30363d] transition-colors"
+              >
+                <h3 className="text-base font-semibold text-[#f0f6fc]">📱 채널별</h3>
+                <span className="text-[#8b949e]">{showChannels ? "▼" : "▶"}</span>
+              </button>
+              {showChannels && kpiData.channels.length > 0 && (
+                <div className="p-4 overflow-x-auto max-h-[500px] overflow-y-auto">
+                  <table className="w-full text-sm">
+                    <tbody>
+                      {kpiData.channels.map((row, idx) => {
+                        // 빈 행 스킵
+                        if (row.every((cell) => !cell || cell.trim() === "")) return null;
+                        return (
+                          <tr key={idx} className={idx > 0 ? "border-t border-[#21262d]" : ""}>
+                            {row.map((cell, cellIdx) => (
+                              <td
+                                key={cellIdx}
+                                className={`px-3 py-2 whitespace-nowrap ${
+                                  idx === 0
+                                    ? "font-semibold text-[#a371f7] bg-[#21262d]"
+                                    : cellIdx === 0
+                                    ? "font-medium text-[#c9d1d9]"
+                                    : "text-[#f0f6fc]"
+                                }`}
+                              >
+                                {cell}
+                              </td>
+                            ))}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
         ) : (
           <div className="rounded-xl border border-[#30363d] bg-[#161b22] p-8 text-center">
             <p className="text-[#8b949e]">
-              &apos;데이터 새로고침&apos; 버튼을 눌러 통합 발주서에서 KPI 데이터를 불러오세요
+              &apos;KPI 데이터 불러오기&apos; 버튼을 눌러 2026KPI 시트에서 데이터를 불러오세요
             </p>
           </div>
         )}

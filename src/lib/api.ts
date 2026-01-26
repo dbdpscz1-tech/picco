@@ -225,6 +225,73 @@ export function findBrand(opt1: string, opt2: string, menu: MenuDict): string {
   return "미분류";
 }
 
+// KPI 데이터 타입
+export interface KPIData {
+  dailySales: string[][]; // S4:U30 일일판매수
+  salesCount: string[][]; // B4:P10 판매 수
+  revenue: string[][]; // B13:P17 매출
+  channels: string[][]; // B45:P83 채널별
+}
+
+// 2026KPI 시트에서 데이터 가져오기
+export async function fetchKPIData(): Promise<KPIData | null> {
+  try {
+    const url = getSheetExportUrl(CONFIG.KPI_SHEET_GID);
+    const response = await fetch(url);
+    const csvText = await response.text();
+    const rows = parseCSV(csvText);
+
+    // 엑셀 열 인덱스 변환 (A=0, B=1, ..., S=18, U=20)
+    const colIndex = (col: string): number => {
+      let index = 0;
+      for (let i = 0; i < col.length; i++) {
+        index = index * 26 + (col.charCodeAt(i) - 64);
+      }
+      return index - 1;
+    };
+
+    // 범위 추출 함수
+    const extractRange = (
+      data: string[][],
+      startCol: string,
+      endCol: string,
+      startRow: number,
+      endRow: number
+    ): string[][] => {
+      const result: string[][] = [];
+      const sCol = colIndex(startCol);
+      const eCol = colIndex(endCol);
+      
+      for (let r = startRow - 1; r < endRow && r < data.length; r++) {
+        const row = data[r];
+        if (row) {
+          const extracted = row.slice(sCol, eCol + 1);
+          result.push(extracted);
+        }
+      }
+      return result;
+    };
+
+    // 각 범위 추출
+    const dailySales = extractRange(rows, "S", "U", 4, 30).filter(
+      (row) => row.some((cell) => cell && cell.trim() !== "")
+    );
+    const salesCount = extractRange(rows, "B", "P", 4, 10);
+    const revenue = extractRange(rows, "B", "P", 13, 17);
+    const channels = extractRange(rows, "B", "P", 45, 83);
+
+    return {
+      dailySales,
+      salesCount,
+      revenue,
+      channels,
+    };
+  } catch (error) {
+    console.error("KPI 데이터 로드 실패:", error);
+    return null;
+  }
+}
+
 // 날짜 포맷팅
 export function formatDate(format: string = "YYYYMMDD"): string {
   const now = new Date();
