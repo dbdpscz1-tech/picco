@@ -489,7 +489,6 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
                 className="w-full rounded-lg border border-[#30363d] bg-[#21262d] px-3 py-2 text-sm text-[#f0f6fc] focus:outline-none"
               />
             </div>
-            </div>
           )}
 
           {/* 상세 주소 */}
