@@ -116,7 +116,7 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
       oncomplete: (data: DaumPostcodeData) => {
         // 도로명 주소 우선, 없으면 지번 주소
         let fullAddress = data.roadAddress || data.jibunAddress || data.address;
-        
+
         // 건물명이 있으면 추가
         if (data.buildingName) {
           fullAddress += ` (${data.buildingName})`;
@@ -319,6 +319,16 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
             <span className="text-sm text-[#f0883e]">⚠️ 오전 11시전까지 꼭 해주셔야합니다</span>
           )}
         </div>
+
+        <div className="mt-4 rounded-lg border border-[#30363d] bg-[#161b22] p-4">
+          <h4 className="mb-2 text-sm font-semibold text-[#c9d1d9]">💡 사용 순서</h4>
+          <ol className="list-decimal list-inside text-sm text-[#8b949e] space-y-1">
+            <li><span className="text-[#f0f6fc]">메뉴판 데이터 로드</span> 버튼 클릭</li>
+            <li>STEP 1에서 <span className="text-[#f0f6fc]">주문 정보 입력</span> (상품명, 수취인 등)</li>
+            <li><span className="text-[#f0f6fc]">✅ 주문 추가</span> 버튼 클릭 (여러 건 입력 가능)</li>
+            <li>입력이 끝나면 하단의 <span className="text-[#f0f6fc]">✅ 주문확정하기</span> 버튼 클릭 후 금액 입금</li>
+          </ol>
+        </div>
       </section>
 
       <div className="border-t border-[#21262d]" />
@@ -338,7 +348,7 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
             </button>
 
             {showMenuPreview && (
-              <div className="mt-3 max-h-48 overflow-auto rounded-xl border border-[#30363d] bg-[#161b22]">
+              <div className="mt-3 max-h-96 overflow-auto rounded-xl border border-[#30363d] bg-[#161b22]">
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 bg-[#21262d]">
                     <tr>
@@ -350,7 +360,7 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
                     </tr>
                   </thead>
                   <tbody>
-                    {menuFull.slice(0, 5).map((item, idx) => (
+                    {menuFull.map((item, idx) => (
                       <tr key={idx} className="border-t border-[#21262d]">
                         <td className="px-3 py-2 text-[#f0f6fc]">{item.no}</td>
                         <td className="px-3 py-2 text-[#f0f6fc]">{item.productName}</td>
@@ -741,7 +751,7 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
                     "쇼핑몰명(1)": "개별주문",
                     수취인전화번호2: "",
                   }));
-                  
+
                   const ws = XLSX.utils.json_to_sheet(rows);
                   const wb = XLSX.utils.book_new();
                   XLSX.utils.book_append_sheet(wb, ws, "개별주문");
