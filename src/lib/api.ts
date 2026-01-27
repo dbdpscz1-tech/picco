@@ -261,7 +261,7 @@ export async function fetchKPIData(): Promise<KPIData | null> {
       const result: string[][] = [];
       const sCol = colIndex(startCol);
       const eCol = colIndex(endCol);
-      
+
       for (let r = startRow - 1; r < endRow && r < data.length; r++) {
         const row = data[r];
         if (row) {
@@ -340,7 +340,10 @@ export async function saveIndividualOrders(orders: {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ orders }),
+      body: JSON.stringify({
+        orders,
+        sheet_gid: CONFIG.INDIVIDUAL_ORDER_GID
+      }),
     });
 
     // no-cors 모드에서는 응답을 읽을 수 없으므로 성공으로 간주
