@@ -1,7 +1,7 @@
 // 피코 커머스 설정
 export const CONFIG = {
   // Google Sheets
-  SPREADSHEET_ID: "141RCJ5K5P9CdhpW60ojMFSPV7mR6CPRz",
+  SPREADSHEET_ID: "1aN2RI_hF0Nq6sfPm5yH3_thYmFKuY3CAgnMIaCEB6yk",
   MENU_SHEET_GID: "202191104",
   ORDER_HISTORY_GID: "1771639339",
   KPI_SHEET_GID: "2042026306",
@@ -11,7 +11,7 @@ export const CONFIG = {
   KAKAO_API_KEY: "bd2c82b2e6e073ce3c2268b0c6f87025",
 
   // Google Apps Script (개별주문 저장)
-  APPS_SCRIPT_URL: "https://script.google.com/macros/s/AKfycbzFhw9IG_3aHpGCva2kc2KmNxsufgH0xc3ZZxSDk_L93JT5HFtAlGK-MIHHnt3r9oeO/exec",
+  APPS_SCRIPT_URL: "https://script.google.com/macros/s/AKfycbyhrxDtxqBBV3jVLWC9knCPXxDxHPKrQXgv8P9tcIWi8VkB0_XfMe7l2tibSH45b4Lh/exec",
 } as const;
 
 // Google Sheets URL 생성

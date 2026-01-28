@@ -45,6 +45,10 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
   const [savedOrders, setSavedOrders] = useState<SavedOrder[]>([]);
   const [loadingSaved, setLoadingSaved] = useState(false);
 
+  // 검색 상태
+  const [searchName, setSearchName] = useState("");
+  const [searchPhone, setSearchPhone] = useState("");
+
   // 주문 폼 상태
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedOption, setSelectedOption] = useState("");
@@ -226,21 +230,26 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
     }
   };
 
-  // 서버에서 저장된 개별주문 불러오기
-  const handleLoadFromServer = async () => {
+  // 주문 검색 (주문자명, 전화번호로)
+  const handleSearchOrders = async () => {
+    if (!searchName && !searchPhone) {
+      alert("주문자명 또는 전화번호를 입력해주세요");
+      return;
+    }
+
     setLoadingSaved(true);
     try {
-      const result = await fetchSavedOrders();
+      const result = await fetchSavedOrders(searchName, searchPhone);
       if (result.success && result.orders) {
         setSavedOrders(result.orders);
         if (result.orders.length === 0) {
-          alert("오늘 저장된 개별주문이 없습니다.\n(기준: 전날 11:01 ~ 오늘 11:00)");
+          alert("검색 결과가 없습니다");
         }
       } else {
-        alert(`불러오기 실패: ${result.error}`);
+        alert(`검색 실패: ${result.error}`);
       }
     } catch (error) {
-      alert(`불러오기 중 오류 발생: ${error}`);
+      alert(`검색 중 오류 발생: ${error}`);
     } finally {
       setLoadingSaved(false);
     }
@@ -661,31 +670,57 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
         </>
       )}
 
-      {/* 관리자용: 저장된 개별주문 불러오기 */}
+      {/* 관리자용: 저장된 개별주문 검색 */}
       <div className="border-t border-[#21262d]" />
 
       <section>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-base font-semibold text-[#c9d1d9]">📥 저장된 개별주문 불러오기</h3>
-            <p className="text-sm text-[#8b949e] mt-1">
-              기준: 전날 11:01 ~ 오늘 11:00 저장된 주문
-            </p>
+        <div className="mb-4">
+          <h3 className="text-base font-semibold text-[#c9d1d9]">🔍 저장된 개별주문 검색</h3>
+          <p className="text-sm text-[#8b949e] mt-1">
+            주문자명과 전화번호를 입력하여 과거 주문 내역을 검색합니다
+          </p>
+        </div>
+
+        {/* 검색 폼 */}
+        <div className="rounded-xl border border-[#30363d] bg-[#161b22] p-4 mb-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div>
+              <label className="mb-1 block text-sm text-[#8b949e]">주문자명</label>
+              <input
+                type="text"
+                value={searchName}
+                onChange={(e) => setSearchName(e.target.value)}
+                placeholder="홍길동"
+                className="w-full rounded-lg border border-[#30363d] bg-[#0d1117] px-3 py-2 text-sm text-[#f0f6fc] focus:border-[#58a6ff] focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm text-[#8b949e]">전화번호</label>
+              <input
+                type="text"
+                value={searchPhone}
+                onChange={(e) => setSearchPhone(e.target.value)}
+                placeholder="010-1234-5678"
+                className="w-full rounded-lg border border-[#30363d] bg-[#0d1117] px-3 py-2 text-sm text-[#f0f6fc] focus:border-[#58a6ff] focus:outline-none"
+              />
+            </div>
+            <div className="flex items-end">
+              <button
+                onClick={handleSearchOrders}
+                disabled={loadingSaved || (!searchName && !searchPhone)}
+                className="w-full rounded-lg bg-[#58a6ff] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#4493f8] disabled:opacity-50"
+              >
+                {loadingSaved ? "검색 중..." : "🔍 검색"}
+              </button>
+            </div>
           </div>
-          <button
-            onClick={handleLoadFromServer}
-            disabled={loadingSaved}
-            className="rounded-lg bg-[#58a6ff] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#4493f8] disabled:opacity-50"
-          >
-            {loadingSaved ? "불러오는 중..." : "🔄 불러오기"}
-          </button>
         </div>
 
         {savedOrders.length > 0 && (
           <div className="space-y-4">
             <div className="rounded-lg bg-[#238636]/10 border border-[#238636]/30 p-4">
               <p className="text-sm text-[#3fb950]">
-                ✅ {savedOrders.length}건의 저장된 개별주문을 불러왔습니다
+                ✅ {savedOrders.length}건의 주문을 찾았습니다
               </p>
             </div>
 
@@ -759,7 +794,13 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
                 }}
                 className="rounded-lg bg-[#238636] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#2ea043]"
               >
-                📥 저장된 개별주문 다운로드
+                📥 검색결과 다운로드
+              </button>
+              <button
+                onClick={() => setSavedOrders([])}
+                className="rounded-lg border border-[#30363d] bg-[#21262d] px-4 py-2 text-sm text-[#c9d1d9] transition-colors hover:border-[#8b949e]"
+              >
+                검색결과 초기화
               </button>
             </div>
           </div>
@@ -768,7 +809,7 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
         {savedOrders.length === 0 && (
           <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-8 text-center">
             <p className="text-[#8b949e]">
-              &apos;불러오기&apos; 버튼을 눌러 저장된 개별주문을 확인하세요
+              주문자명과 전화번호를 입력 후 &apos;검색&apos; 버튼을 눌러주세요
             </p>
           </div>
         )}

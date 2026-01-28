@@ -354,10 +354,20 @@ export async function saveIndividualOrders(orders: {
   }
 }
 
-// 개별주문 불러오기 (오늘 11시 기준)
-export async function fetchSavedOrders(): Promise<{ success: boolean; orders?: SavedOrder[]; count?: number; error?: string }> {
+// 개별주문 불러오기 (검색 지원: name, phone 파라미터)
+export async function fetchSavedOrders(name?: string, phone?: string): Promise<{ success: boolean; orders?: SavedOrder[]; count?: number; searchMode?: boolean; error?: string }> {
   try {
-    const response = await fetch(CONFIG.APPS_SCRIPT_URL, {
+    // 검색 파라미터가 있으면 쿼리스트링 추가
+    let url = CONFIG.APPS_SCRIPT_URL;
+    const params = new URLSearchParams();
+    if (name) params.append('name', name);
+    if (phone) params.append('phone', phone);
+
+    if (params.toString()) {
+      url += '?' + params.toString();
+    }
+
+    const response = await fetch(url, {
       method: "GET",
     });
 
