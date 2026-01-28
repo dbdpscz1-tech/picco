@@ -1,10 +1,13 @@
 // 피코 커머스 설정
 export const CONFIG = {
-  // Google Sheets
-  SPREADSHEET_ID: "1aN2RI_hF0Nq6sfPm5yH3_thYmFKuY3CAgnMIaCEB6yk",
+  // Google Sheets - 메뉴판/주문이력 (기존 스프레드시트)
+  SPREADSHEET_ID: "141RCJ5K5P9CdhpW60ojMFSPV7mR6CPRz",
   MENU_SHEET_GID: "202191104",
   ORDER_HISTORY_GID: "1771639339",
   KPI_SHEET_GID: "2042026306",
+
+  // Google Sheets - 개별주문 (피코작업몰 스프레드시트)
+  INDIVIDUAL_ORDER_SPREADSHEET_ID: "1aN2RI_hF0Nq6sfPm5yH3_thYmFKuY3CAgnMIaCEB6yk",
   INDIVIDUAL_ORDER_GID: "809784246", // 피코 개별주문 시트
 
   // Kakao API
