@@ -36,6 +36,7 @@ export interface IndividualOrder {
   quantity: number;
   supply_price: number;
   shipping_fee: number;
+  brand: string;  // 동일 주소+브랜드 그룹 배송비 계산용
 }
 
 // KPI 통계 타입

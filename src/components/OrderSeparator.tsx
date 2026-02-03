@@ -26,6 +26,25 @@ export default function OrderSeparator({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const invoiceInputRef = useRef<HTMLInputElement>(null);
 
+  // 미리보기 모달 상태
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewBrand, setPreviewBrand] = useState<string>("");
+  const [previewOrders, setPreviewOrders] = useState<OrderData[]>([]);
+
+  // 미리보기 열기
+  const openPreview = (brand: string, orders: OrderData[]) => {
+    setPreviewBrand(brand);
+    setPreviewOrders(orders);
+    setShowPreviewModal(true);
+  };
+
+  // 미리보기 닫기
+  const closePreview = () => {
+    setShowPreviewModal(false);
+    setPreviewBrand("");
+    setPreviewOrders([]);
+  };
+
   // 발주서 처리 함수
   const processOrders = (
     data: (string | number | null)[][],
@@ -213,7 +232,7 @@ export default function OrderSeparator({
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const reader = new FileReader();
-      
+
       await new Promise<void>((resolve) => {
         reader.onload = (event) => {
           const data = event.target?.result;
@@ -410,32 +429,48 @@ export default function OrderSeparator({
               </div>
             </div>
 
-            {/* 파일 다운로드 버튼들 */}
+            {/* 파일 다운로드 및 미리보기 버튼들 */}
             <div>
-              <h3 className="mb-2 text-sm font-medium text-[#8b949e]">파일 다운로드</h3>
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              <h3 className="mb-2 text-sm font-medium text-[#8b949e]">파일 미리보기 / 다운로드</h3>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
                 {Object.entries(processedResults)
                   .sort((a, b) => b[1].length - a[1].length)
                   .map(([brand, orders]) => {
                     const totalQty = orders.reduce((sum, o) => sum + o.qty, 0);
                     const icon = brand === "미분류" ? "⚠️" : "📄";
                     return (
-                      <button
+                      <div
                         key={brand}
-                        onClick={() => downloadExcel(brand, orders)}
-                        className={`rounded-lg border px-4 py-3 text-left text-sm transition-colors ${
-                          brand === "미분류"
-                            ? "border-[#f0883e] bg-[#f0883e]/10 hover:bg-[#f0883e]/20"
-                            : "border-[#30363d] bg-[#21262d] hover:border-[#8b949e]"
-                        }`}
+                        className={`rounded-lg border p-4 ${brand === "미분류"
+                          ? "border-[#f0883e] bg-[#f0883e]/10"
+                          : "border-[#30363d] bg-[#21262d]"
+                          }`}
                       >
-                        <div className="font-medium text-[#f0f6fc]">
-                          {icon} {brand}
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <div className="font-medium text-[#f0f6fc]">
+                              {icon} {brand}
+                            </div>
+                            <div className="mt-1 text-xs text-[#8b949e]">
+                              ({orders.length}건 / {totalQty}개)
+                            </div>
+                          </div>
                         </div>
-                        <div className="mt-1 text-xs text-[#8b949e]">
-                          ({orders.length}건/{totalQty}개)
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => openPreview(brand, orders)}
+                            className="flex-1 rounded-lg border border-[#58a6ff] bg-[#58a6ff]/10 px-3 py-2 text-xs font-medium text-[#58a6ff] transition-colors hover:bg-[#58a6ff]/20"
+                          >
+                            👁️ 미리보기
+                          </button>
+                          <button
+                            onClick={() => downloadExcel(brand, orders)}
+                            className="flex-1 rounded-lg bg-[#238636] px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-[#2ea043]"
+                          >
+                            📥 다운로드
+                          </button>
                         </div>
-                      </button>
+                      </div>
                     );
                   })}
               </div>
@@ -510,6 +545,105 @@ export default function OrderSeparator({
           </div>
         )}
       </section>
+
+      {/* 미리보기 모달 */}
+      {showPreviewModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-xl border border-[#30363d] bg-[#161b22] shadow-2xl">
+            {/* 모달 헤더 */}
+            <div className="flex items-center justify-between border-b border-[#30363d] bg-[#21262d] px-6 py-4">
+              <div>
+                <h3 className="text-lg font-bold text-[#f0f6fc]">
+                  📋 엑셀 미리보기: {previewBrand}
+                </h3>
+                <p className="mt-1 text-sm text-[#8b949e]">
+                  {previewOrders.length}건 / 총 {previewOrders.reduce((sum, o) => sum + o.qty, 0)}개
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    downloadExcel(previewBrand, previewOrders);
+                    closePreview();
+                  }}
+                  className="rounded-lg bg-[#238636] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#2ea043]"
+                >
+                  📥 다운로드
+                </button>
+                <button
+                  onClick={closePreview}
+                  className="rounded-lg border border-[#30363d] bg-[#21262d] px-4 py-2 text-sm font-medium text-[#8b949e] transition-colors hover:border-[#8b949e] hover:text-[#f0f6fc]"
+                >
+                  ✕ 닫기
+                </button>
+              </div>
+            </div>
+
+            {/* 모달 바디 - 테이블 */}
+            <div className="max-h-[70vh] overflow-auto p-6">
+              <div className="overflow-hidden rounded-lg border border-[#30363d]">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-[#1e3c72] text-white">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-semibold">순번</th>
+                      <th className="px-4 py-3 text-left font-semibold">이름</th>
+                      <th className="px-4 py-3 text-left font-semibold">주소</th>
+                      <th className="px-4 py-3 text-left font-semibold">상품명</th>
+                      <th className="px-4 py-3 text-left font-semibold">옵션</th>
+                      <th className="px-4 py-3 text-center font-semibold">수량</th>
+                      <th className="px-4 py-3 text-right font-semibold">단가</th>
+                      <th className="px-4 py-3 text-right font-semibold">소계</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {previewOrders.map((order, idx) => {
+                      const name = order.data[4] || "";
+                      const address = order.data[7] || "";
+                      const productName = order.data[9] || "";
+                      const option = order.opt || "";
+                      const price = Number(order.data[13]) || 0;
+                      const subtotal = price * order.qty;
+
+                      return (
+                        <tr
+                          key={idx}
+                          className={`border-t border-[#21262d] ${idx % 2 === 0 ? 'bg-[#0d1117]' : 'bg-[#161b22]'}`}
+                        >
+                          <td className="px-4 py-3 text-[#8b949e]">{idx + 1}</td>
+                          <td className="px-4 py-3 text-[#f0f6fc] font-medium">{String(name)}</td>
+                          <td className="px-4 py-3 text-[#8b949e] max-w-xs truncate" title={String(address)}>{String(address).slice(0, 30)}...</td>
+                          <td className="px-4 py-3 text-[#c9d1d9] max-w-xs truncate" title={String(productName)}>{String(productName)}</td>
+                          <td className="px-4 py-3 text-[#8b949e] max-w-xs truncate" title={option}>{option.slice(0, 25)}...</td>
+                          <td className="px-4 py-3 text-center text-[#f0f6fc] font-medium">{order.qty}</td>
+                          <td className="px-4 py-3 text-right text-[#8b949e]">₩{price.toLocaleString()}</td>
+                          <td className="px-4 py-3 text-right text-[#3fb950] font-medium">₩{subtotal.toLocaleString()}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot className="bg-[#21262d]">
+                    <tr className="border-t-2 border-[#58a6ff]">
+                      <td colSpan={5} className="px-4 py-4 text-right font-bold text-[#f0f6fc]">
+                        합계
+                      </td>
+                      <td className="px-4 py-4 text-center font-bold text-[#58a6ff]">
+                        {previewOrders.reduce((sum, o) => sum + o.qty, 0)}개
+                      </td>
+                      <td className="px-4 py-4 text-right text-[#8b949e]">-</td>
+                      <td className="px-4 py-4 text-right font-bold text-[#3fb950]">
+                        ₩{previewOrders.reduce((sum, o) => {
+                          const price = Number(o.data[13]) || 0;
+                          return sum + (price * o.qty);
+                        }, 0).toLocaleString()}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

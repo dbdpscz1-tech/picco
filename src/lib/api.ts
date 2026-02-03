@@ -308,6 +308,76 @@ export function formatDate(format: string = "YYYYMMDD"): string {
   return `${year}-${month}-${day}`;
 }
 
+// 발주 시간 범위 계산 (전일 11:01 ~ 당일 11:00)
+export interface OrderTimeRange {
+  start: Date;
+  end: Date;
+  startStr: string;
+  endStr: string;
+}
+
+export function getOrderTimeRange(): OrderTimeRange {
+  const now = new Date();
+  const today11am = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 11, 0, 0, 0);
+
+  let start: Date;
+  let end: Date;
+
+  if (now >= today11am) {
+    // 현재 시간이 오늘 11시 이후면: 오늘 11:01 ~ 내일 11:00
+    start = new Date(today11am.getTime() + 60000); // 11:01
+    end = new Date(today11am.getTime() + 24 * 60 * 60 * 1000); // 다음날 11:00
+  } else {
+    // 현재 시간이 오늘 11시 이전이면: 어제 11:01 ~ 오늘 11:00
+    start = new Date(today11am.getTime() - 24 * 60 * 60 * 1000 + 60000); // 어제 11:01
+    end = today11am; // 오늘 11:00
+  }
+
+  const formatDateTime = (d: Date) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const hours = String(d.getHours()).padStart(2, "0");
+    const minutes = String(d.getMinutes()).padStart(2, "0");
+    return `${year}-${month}-${day} ${hours}:${minutes}`;
+  };
+
+  return {
+    start,
+    end,
+    startStr: formatDateTime(start),
+    endStr: formatDateTime(end),
+  };
+}
+
+// 시간 문자열을 Date로 파싱 (다양한 형식 지원)
+export function parseOrderTime(timeStr: string): Date | null {
+  if (!timeStr) return null;
+
+  // "2026-02-03 10:30:45" 또는 "2026/02/03 10:30:45" 형식
+  const match = timeStr.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/);
+  if (match) {
+    const [, year, month, day, hours, minutes, seconds = "0"] = match;
+    return new Date(
+      parseInt(year),
+      parseInt(month) - 1,
+      parseInt(day),
+      parseInt(hours),
+      parseInt(minutes),
+      parseInt(seconds)
+    );
+  }
+
+  return null;
+}
+
+// 주문이 시간 범위 내에 있는지 확인
+export function isOrderInTimeRange(savedTimeStr: string, range: OrderTimeRange): boolean {
+  const orderTime = parseOrderTime(savedTimeStr);
+  if (!orderTime) return false;
+  return orderTime >= range.start && orderTime < range.end;
+}
+
 // 개별주문 저장 타입
 export interface SavedOrder {
   saved_time: string;
@@ -332,6 +402,9 @@ export async function saveIndividualOrders(orders: {
   quantity: number;
   supply_price: number;
   shipping_fee: number;
+  brand?: string;
+  original_shipping_fee?: number;  // 원본 배송비 (그룹화 전)
+  is_shipping_grouped?: boolean;   // 배송비 그룹화로 0원 처리 여부
 }[]): Promise<{ success: boolean; count?: number; error?: string }> {
   try {
     const response = await fetch(CONFIG.APPS_SCRIPT_URL, {
