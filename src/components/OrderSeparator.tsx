@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { findBrand, formatDate } from "@/lib/api";
+import { useState, useRef, useEffect } from "react";
+import { findBrand, formatDate, fetchSavedOrders, type SavedOrder } from "@/lib/api";
 import type { MenuDict, ProcessedResults, OrderData } from "@/lib/types";
 import * as XLSX from "xlsx";
 import ExcelJS from "exceljs";
@@ -31,6 +31,18 @@ export default function OrderSeparator({
   const [previewBrand, setPreviewBrand] = useState<string>("");
   const [previewOrders, setPreviewOrders] = useState<OrderData[]>([]);
 
+  // 📅 날짜 검색 상태
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    const today = new Date();
+    return today.toISOString().split('T')[0]; // YYYY-MM-DD 형식
+  });
+  const [individualOrders, setIndividualOrders] = useState<SavedOrder[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+
+  // 🔀 데이터 병합 상태
+  const [mergedData, setMergedData] = useState<(string | number | null)[][] | null>(null);
+  const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
+
   // 미리보기 열기
   const openPreview = (brand: string, orders: OrderData[]) => {
     setPreviewBrand(brand);
@@ -44,6 +56,32 @@ export default function OrderSeparator({
     setPreviewBrand("");
     setPreviewOrders([]);
   };
+
+  // 📅 선택한 날짜의 개별주문 데이터 조회
+  const fetchOrdersByDate = async () => {
+    setLoadingOrders(true);
+    try {
+      const result = await fetchSavedOrders();
+      if (result.success && result.orders) {
+        // 선택한 날짜에 해당하는 주문만 필터링
+        const targetDate = selectedDate.replace(/-/g, '');
+        const filtered = result.orders.filter(order => {
+          const orderDate = order.saved_time?.split(' ')[0]?.replace(/-/g, '') || '';
+          return orderDate === targetDate;
+        });
+        setIndividualOrders(filtered);
+      }
+    } catch (error) {
+      console.error("개별주문 조회 실패:", error);
+    } finally {
+      setLoadingOrders(false);
+    }
+  };
+
+  // 날짜 변경 시 자동 조회
+  useEffect(() => {
+    fetchOrdersByDate();
+  }, [selectedDate]);
 
   // 발주서 처리 함수
   const processOrders = (
@@ -110,11 +148,82 @@ export default function OrderSeparator({
     reader.readAsBinaryString(file);
   };
 
-  // 브랜드별 분리 실행
+  // 🔀 Step 2: 데이터 병합 (원본 발주서 + 개별주문)
+  const handleMergeData = () => {
+    if (!sourceData) {
+      alert("먼저 원본 발주서를 업로드하세요");
+      return;
+    }
+
+    // 헤더 분리
+    const header = sourceData[0];
+    const originalRows = sourceData.slice(1);
+
+    // 개별주문을 원본 발주서 형식에 맞게 변환
+    // 배송비 중복 제거 로직 적용 (동일 주소+브랜드 그룹에서 MAX 배송비만)
+    const brandMaxShipping = new Map<string, number>();
+    individualOrders.forEach(order => {
+      // 브랜드 찾기 - 상품명에서 추출 또는 메뉴 데이터 활용
+      const brand = findBrand(order.product_name, order.option, menuData);
+      const groupKey = `${order.address}::${brand}`;
+      const currentMax = brandMaxShipping.get(groupKey) || 0;
+      brandMaxShipping.set(groupKey, Math.max(currentMax, order.shipping_fee));
+    });
+
+    const processedGroups = new Set<string>();
+    const individualRows: (string | number | null)[][] = individualOrders.map((order, idx) => {
+      const brand = findBrand(order.product_name, order.option, menuData);
+      const groupKey = `${order.address}::${brand}`;
+      const isFirstInGroup = !processedGroups.has(groupKey);
+      const maxShippingForGroup = brandMaxShipping.get(groupKey) || 0;
+      const appliedShippingFee = isFirstInGroup ? maxShippingForGroup : 0;
+      processedGroups.add(groupKey);
+
+      // 원본 발주서 형식에 맞게 데이터 생성 (20개 컬럼 기준)
+      const today = formatDate("YYYYMMDD");
+      return [
+        originalRows.length + idx + 1,         // No.
+        today,                                  // 발주일
+        `IND${today}${String(idx + 1).padStart(4, "0")}`, // 주문번호
+        `개별${String(idx + 1).padStart(4, "0")}`, // 주문번호(쇼핑)
+        "",                                     // 상품코드
+        order.recipient_name,                   // 이름
+        order.recipient_phone,                  // 수취인전화번호1
+        "",                                     // 우편번호
+        order.address,                          // 주소
+        "",                                     // 배송메세지
+        order.product_name,                     // 상품명
+        order.option,                           // 옵션1
+        order.option,                           // 옵션2
+        order.quantity,                         // 수량
+        order.supply_price,                     // 단가
+        "",                                     // 추가비용
+        "",                                     // 특이사항
+        "",                                     // 택배사
+        "",                                     // 운송장
+        appliedShippingFee,                     // 택배비 (그룹별 MAX)
+        order.recipient_name,                   // 보내는사람
+      ];
+    });
+
+    // 원본 + 개별주문 병합
+    const merged: (string | number | null)[][] = [header, ...originalRows, ...individualRows];
+    setMergedData(merged);
+    setCurrentStep(2);
+
+    alert(`✅ 데이터 병합 완료!\n\n📊 원본 발주서: ${originalRows.length}건\n📝 개별 주문: ${individualOrders.length}건\n📦 총 병합: ${originalRows.length + individualOrders.length}건`);
+  };
+
+  // 🏷️ Step 3: 브랜드별 분리 실행 (병합 데이터 기준)
   const handleSeparate = () => {
-    if (!sourceData || Object.keys(menuData).length === 0) return;
-    const results = processOrders(sourceData, menuData);
+    const dataToProcess = mergedData || sourceData;
+    if (!dataToProcess || Object.keys(menuData).length === 0) {
+      alert("처리할 데이터가 없습니다. 원본 발주서를 먼저 업로드하세요.");
+      return;
+    }
+    const results = processOrders(dataToProcess, menuData);
     setProcessedResults(results);
+    setCurrentStep(3);
   };
 
   // 엑셀 다운로드 (스타일링 포함 - ExcelJS 사용)
@@ -334,9 +443,71 @@ export default function OrderSeparator({
 
   return (
     <div className="space-y-8">
-      {/* 1. 원본 발주서 업로드 */}
+      {/* 📅 발주 대상 날짜 선택 */}
+      <section className="rounded-xl border-2 border-[#58a6ff] bg-gradient-to-r from-[#0d1117] to-[#161b22] p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-[#58a6ff] flex items-center gap-2">
+            📅 발주 대상 날짜 선택
+          </h2>
+          <div className="flex items-center gap-3">
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="rounded-lg border border-[#30363d] bg-[#161b22] px-4 py-2 text-sm text-[#f0f6fc] focus:border-[#58a6ff] focus:outline-none"
+            />
+            <button
+              onClick={fetchOrdersByDate}
+              disabled={loadingOrders}
+              className="rounded-lg bg-[#21262d] px-3 py-2 text-xs font-medium text-[#8b949e] transition-colors hover:bg-[#30363d] hover:text-[#f0f6fc] disabled:opacity-50"
+            >
+              {loadingOrders ? "조회 중..." : "🔄 새로고침"}
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="rounded-lg bg-[#238636]/10 border border-[#238636]/30 p-4 text-center">
+            <p className="text-3xl font-bold text-[#3fb950] mb-1">
+              {loadingOrders ? "..." : individualOrders.length}
+            </p>
+            <p className="text-xs text-[#8b949e]">개별 주문 건수</p>
+          </div>
+          <div className="rounded-lg bg-[#58a6ff]/10 border border-[#58a6ff]/30 p-4 text-center">
+            <p className="text-2xl font-bold text-[#58a6ff] mb-1">
+              {loadingOrders ? "..." : `₩${individualOrders.reduce((sum, o) => sum + (o.supply_price * o.quantity) + o.shipping_fee, 0).toLocaleString()}`}
+            </p>
+            <p className="text-xs text-[#8b949e]">예상 결제 금액</p>
+          </div>
+        </div>
+      </section>
+
+      {/* 3단계 진행 표시 */}
+      <div className="flex items-center justify-center gap-4">
+        <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${currentStep >= 1 ? 'bg-[#238636]/20 text-[#3fb950]' : 'bg-[#21262d] text-[#8b949e]'}`}>
+          <span className="font-bold">1</span>
+          <span className="text-sm">업로드</span>
+        </div>
+        <div className="text-[#30363d]">→</div>
+        <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${currentStep >= 2 ? 'bg-[#238636]/20 text-[#3fb950]' : 'bg-[#21262d] text-[#8b949e]'}`}>
+          <span className="font-bold">2</span>
+          <span className="text-sm">병합</span>
+        </div>
+        <div className="text-[#30363d]">→</div>
+        <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${currentStep >= 3 ? 'bg-[#238636]/20 text-[#3fb950]' : 'bg-[#21262d] text-[#8b949e]'}`}>
+          <span className="font-bold">3</span>
+          <span className="text-sm">분리/다운로드</span>
+        </div>
+      </div>
+
+      <div className="border-t border-[#21262d]" />
+
+      {/* Step 1: 원본 발주서 업로드 */}
       <section>
-        <h2 className="mb-4 text-lg font-semibold text-[#c9d1d9]">1. 원본 발주서 업로드</h2>
+        <h2 className="mb-4 text-lg font-semibold text-[#c9d1d9] flex items-center gap-2">
+          <span className="bg-[#238636] text-white text-xs px-2 py-1 rounded">Step 1</span>
+          원본 발주서 업로드
+        </h2>
         <div
           onClick={() => fileInputRef.current?.click()}
           className="cursor-pointer rounded-xl border-2 border-dashed border-[#30363d] bg-[#161b22] p-8 text-center transition-colors hover:border-[#58a6ff]/50"
@@ -364,21 +535,65 @@ export default function OrderSeparator({
 
       <div className="border-t border-[#21262d]" />
 
-      {/* 2. 브랜드별 분리 및 다운로드 */}
+      {/* Step 2: 데이터 병합 */}
       <section>
-        <h2 className="mb-4 text-lg font-semibold text-[#c9d1d9]">2. 브랜드별 분리 및 다운로드</h2>
+        <h2 className="mb-4 text-lg font-semibold text-[#c9d1d9] flex items-center gap-2">
+          <span className={`text-white text-xs px-2 py-1 rounded ${sourceData ? 'bg-[#238636]' : 'bg-[#6e7681]'}`}>Step 2</span>
+          데이터 병합 (원본 + 개별주문)
+        </h2>
 
-        {sourceData && Object.keys(menuData).length > 0 ? (
+        <p className="mb-4 text-sm text-[#8b949e]">
+          원본 발주서 데이터와 {selectedDate} 날짜의 개별 주문 {individualOrders.length}건을 병합합니다.
+          <br />
+          <span className="text-[#f0883e]">* 동일 주소+브랜드 그룹에서 MAX 배송비 1회만 적용됩니다.</span>
+        </p>
+
+        {sourceData && individualOrders.length > 0 ? (
           <button
-            onClick={handleSeparate}
-            className="w-full rounded-lg bg-[#238636] px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-[#2ea043]"
+            onClick={handleMergeData}
+            className="w-full rounded-lg bg-[#58a6ff] px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-[#388bfd]"
           >
-            브랜드별 분리 실행
+            🔀 데이터 병합 실행 (원본 {sourceData.length - 1}건 + 개별 {individualOrders.length}건)
           </button>
         ) : (
           <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-4 text-center text-sm text-[#8b949e]">
             {!sourceData
-              ? "원본 발주서를 먼저 업로드하세요"
+              ? "Step 1에서 원본 발주서를 먼저 업로드하세요"
+              : individualOrders.length === 0
+                ? `${selectedDate} 날짜의 개별 주문이 없습니다`
+                : "병합 준비 완료"}
+          </div>
+        )}
+
+        {mergedData && (
+          <div className="mt-4 rounded-lg border border-[#58a6ff] bg-[#58a6ff]/10 p-4">
+            <p className="text-sm text-[#58a6ff]">
+              ✅ 병합 완료: 총 {mergedData.length - 1}건
+            </p>
+          </div>
+        )}
+      </section>
+
+      <div className="border-t border-[#21262d]" />
+
+      {/* Step 3: 브랜드별 분리 및 다운로드 */}
+      <section>
+        <h2 className="mb-4 text-lg font-semibold text-[#c9d1d9] flex items-center gap-2">
+          <span className={`text-white text-xs px-2 py-1 rounded ${mergedData || sourceData ? 'bg-[#238636]' : 'bg-[#6e7681]'}`}>Step 3</span>
+          브랜드별 분리 및 다운로드
+        </h2>
+
+        {(mergedData || sourceData) && Object.keys(menuData).length > 0 ? (
+          <button
+            onClick={handleSeparate}
+            className="w-full rounded-lg bg-[#238636] px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-[#2ea043]"
+          >
+            🏷️ 브랜드별 분리 실행 ({mergedData ? '병합 데이터' : '원본 데이터'} 기준)
+          </button>
+        ) : (
+          <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-4 text-center text-sm text-[#8b949e]">
+            {!(mergedData || sourceData)
+              ? "먼저 데이터를 업로드하거나 병합하세요"
               : "대시보드 탭에서 메뉴판을 먼저 로드하세요"}
           </div>
         )}
