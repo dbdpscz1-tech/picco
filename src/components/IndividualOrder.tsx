@@ -344,20 +344,17 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
     setGeneratedOrderDf(null);
   };
 
-  // 발주서 생성 (동일 주소+브랜드 그룹에서 배송비는 1회만 부과)
+  // 발주서 생성 - 모드별 배송비 적용
+  // 단일 주소 모드: 그룹(주소+브랜드)별 MAX 배송비만 첫 항목에 부과
+  // 다중 주소 모드: 각 주문의 배송비 그대로 적용
   const handleGenerateOrder = () => {
     const today = formatDate("YYYYMMDD");
 
-    // 배송비 그룹화를 위해 이미 처리된 주소+브랜드 조합 추적
-    const processedGroups = new Set<string>();
+    let rows: Record<string, string | number>[];
 
-    const rows = orders.map((order, i) => {
-      const groupKey = `${order.address}::${order.brand}`;
-      const isFirstInGroup = !processedGroups.has(groupKey);
-      const appliedShippingFee = isFirstInGroup ? order.shipping_fee : 0;
-      processedGroups.add(groupKey);
-
-      return {
+    if (inputMode === "multiple") {
+      // 다중 주소 모드: 모든 배송비 독립 적용
+      rows = orders.map((order, i) => ({
         "No.": i + 1,
         "수집일자(YYYYMMDD)": today,
         "주문번호(사방넷)": `IND${today}${String(i + 1).padStart(4, "0")}`,
@@ -377,20 +374,68 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
         특이사항: "",
         택배사: "",
         송장번호: "",
-        택배비: appliedShippingFee, // 그룹별 첫 항목만 배송비, 나머지는 0원
+        택배비: order.shipping_fee, // 다중 모드: 각각 배송비 그대로 적용
         주문자명: order.recipient_name,
         주문자전화번호1: order.recipient_phone,
         TEMP5: "",
-        비고: isFirstInGroup ? "" : "(동일주소 배송비 차감)", // 차감된 경우 비고 표시
+        비고: "",
         "쇼핑몰명(1)": "개별주문",
         수취인전화번호2: "",
-      };
-    });
+      }));
+    } else {
+      // 단일 주소 모드: 그룹별 MAX 배송비 계산
+      const groupMaxShipping = new Map<string, number>();
+      orders.forEach(order => {
+        const groupKey = `${order.address}::${order.brand}`;
+        const currentMax = groupMaxShipping.get(groupKey) || 0;
+        groupMaxShipping.set(groupKey, Math.max(currentMax, order.shipping_fee));
+      });
+
+      // 그룹별로 MAX 배송비를 적용받을 첫 항목만 추적
+      const processedGroups = new Set<string>();
+
+      rows = orders.map((order, i) => {
+        const groupKey = `${order.address}::${order.brand}`;
+        const isFirstInGroup = !processedGroups.has(groupKey);
+        const maxShippingForGroup = groupMaxShipping.get(groupKey) || 0;
+        const appliedShippingFee = isFirstInGroup ? maxShippingForGroup : 0;
+        processedGroups.add(groupKey);
+
+        return {
+          "No.": i + 1,
+          "수집일자(YYYYMMDD)": today,
+          "주문번호(사방넷)": `IND${today}${String(i + 1).padStart(4, "0")}`,
+          "주문번호(쇼핑몰)": `개별${String(i + 1).padStart(4, "0")}`,
+          "상품코드(쇼핑몰)": "",
+          수취인명: order.recipient_name,
+          수취인전화번호1: order.recipient_phone,
+          "수취인우편번호(1)": "",
+          "수취인주소(1)": order.address,
+          배송메세지: "",
+          "상품명(수집)": order.product_name,
+          "옵션(수집)": order.option,
+          "옵션(확정)": order.option,
+          수량: order.quantity,
+          단가: order.supply_price,
+          추가비용: "",
+          특이사항: "",
+          택배사: "",
+          송장번호: "",
+          택배비: appliedShippingFee, // 그룹별 MAX 배송비, 첫 항목에만 적용
+          주문자명: order.recipient_name,
+          주문자전화번호1: order.recipient_phone,
+          TEMP5: "",
+          비고: isFirstInGroup ? "" : "(동일그룹 배송비 차감)",
+          "쇼핑몰명(1)": "개별주문",
+          수취인전화번호2: "",
+        };
+      });
+    }
 
     setGeneratedOrderDf(rows);
   };
 
-  // 서버에 개별주문 저장 (주문확정) - 배송비 그룹화 적용
+  // 서버에 개별주문 저장 (주문확정) - 모드별 배송비 적용
   const handleSaveToServer = async () => {
     if (orders.length === 0) {
       alert("확정할 주문이 없습니다");
@@ -399,31 +444,51 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
 
     setSaving(true);
     try {
-      // 배송비 그룹화 적용하여 실제 부과 배송비 계산
-      const processedGroups = new Set<string>();
-      const ordersWithAppliedShipping = orders.map(order => {
-        const groupKey = `${order.address}::${order.brand}`;
-        const isFirstInGroup = !processedGroups.has(groupKey);
-        const appliedShippingFee = isFirstInGroup ? order.shipping_fee : 0;
-        processedGroups.add(groupKey);
+      let ordersWithAppliedShipping;
 
-        return {
+      if (inputMode === "multiple") {
+        // 다중 주소 모드: 모든 배송비 독립 적용 (중복 제거 없음)
+        ordersWithAppliedShipping = orders.map(order => ({
           ...order,
-          shipping_fee: appliedShippingFee, // 실제 부과 배송비로 대체
-          original_shipping_fee: order.shipping_fee, // 원본 배송비 보관
-          is_shipping_grouped: !isFirstInGroup, // 그룹화로 인해 0원 처리되었는지 여부
-        };
-      });
+          original_shipping_fee: order.shipping_fee,
+          is_shipping_grouped: false,
+        }));
+      } else {
+        // 단일 주소 모드: 그룹별 MAX 배송비 계산 후 첫 항목에만 적용
+        const groupMaxShipping = new Map<string, number>();
+        orders.forEach(order => {
+          const groupKey = `${order.address}::${order.brand}`;
+          const currentMax = groupMaxShipping.get(groupKey) || 0;
+          groupMaxShipping.set(groupKey, Math.max(currentMax, order.shipping_fee));
+        });
+
+        const processedGroups = new Set<string>();
+        ordersWithAppliedShipping = orders.map(order => {
+          const groupKey = `${order.address}::${order.brand}`;
+          const isFirstInGroup = !processedGroups.has(groupKey);
+          const maxShippingForGroup = groupMaxShipping.get(groupKey) || 0;
+          const appliedShippingFee = isFirstInGroup ? maxShippingForGroup : 0;
+          processedGroups.add(groupKey);
+
+          return {
+            ...order,
+            shipping_fee: appliedShippingFee,
+            original_shipping_fee: order.shipping_fee,
+            is_shipping_grouped: !isFirstInGroup,
+          };
+        });
+      }
 
       const result = await saveIndividualOrders(ordersWithAppliedShipping);
       if (result.success) {
-        // 저장된 금액 계산 (그룹화된 배송비 적용)
+        // 저장된 금액 계산
         const totalSaved = ordersWithAppliedShipping.reduce(
           (sum, order) => sum + (order.supply_price * order.quantity) + order.shipping_fee,
           0
         );
 
-        alert(`✅ ${result.count}건의 주문이 확정되었습니다!\n\n💰 총 결제 금액: ₩${totalSaved.toLocaleString()}\n\n📌 입금 안내\n하나은행 219-910038-71104 (피코)\n\n❗ 수령인 = 입금자명 일치 필요\n입금 완료 후 발주가 진행됩니다.`);
+        const modeText = inputMode === "multiple" ? "다중 주소" : "단일 주소";
+        alert(`✅ ${result.count}건의 주문이 확정되었습니다! (${modeText} 모드)\n\n💰 총 결제 금액: ₩${totalSaved.toLocaleString()}\n\n📌 입금 안내\n하나은행 219-910038-71104 (피코)\n\n❗ 수령인 = 입금자명 일치 필요\n입금 완료 후 발주가 진행됩니다.`);
         setOrders([]); // 저장 후 목록 초기화
         setGeneratedOrderDf(null);
       } else {
@@ -507,29 +572,79 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
     reader.readAsBinaryString(file);
   };
 
-  // 총 합계 계산 (동일 주소+브랜드 그룹에서 배송비는 1회만 부과)
+  // 총 합계 계산 - 모드별 배송비 계산 로직
+  // 단일 주소 모드: 그룹(주소+브랜드)별 MAX 배송비 1회만 부과
+  // 다중 주소 모드: 각 주문의 배송비 모두 합산 (중복 제거 없음)
   const calculateTotalWithGroupedShipping = () => {
-    // 이미 배송비가 적용된 주소+브랜드 조합을 추적
-    const processedGroups = new Set<string>();
+    // 공급가 총합
+    const supplyTotal = orders.reduce(
+      (sum, order) => sum + (order.supply_price * order.quantity),
+      0
+    );
 
-    return orders.reduce((sum, order) => {
-      // 주소와 브랜드를 조합한 그룹 키 생성
-      const groupKey = `${order.address}::${order.brand}`;
+    // inputMode에 따라 배송비 계산 방식 결정
+    if (inputMode === "multiple") {
+      // 다중 주소 모드: 모든 배송비 합산 (중복 제거 없음)
+      const shippingTotal = orders.reduce(
+        (sum, order) => sum + order.shipping_fee,
+        0
+      );
+      return supplyTotal + shippingTotal;
+    } else {
+      // 단일 주소 모드: 그룹(주소+브랜드)별 MAX 배송비 1회만 부과
+      const groupMaxShipping = new Map<string, number>();
 
-      // 공급가는 항상 합산
-      let orderTotal = order.supply_price * order.quantity;
+      orders.forEach(order => {
+        const groupKey = `${order.address}::${order.brand}`;
+        const currentMax = groupMaxShipping.get(groupKey) || 0;
+        groupMaxShipping.set(groupKey, Math.max(currentMax, order.shipping_fee));
+      });
 
-      // 해당 그룹의 첫 번째 주문인 경우에만 배송비 추가
-      if (!processedGroups.has(groupKey)) {
-        orderTotal += order.shipping_fee;
-        processedGroups.add(groupKey);
+      // 각 그룹의 MAX 배송비만 합산
+      const shippingTotal = Array.from(groupMaxShipping.values()).reduce(
+        (sum, fee) => sum + fee,
+        0
+      );
+
+      return supplyTotal + shippingTotal;
+    }
+  };
+
+  // 단일 주소 모드: 실시간 예상 배송비 계산 (productRows 기준)
+  const calculateSingleModePreview = () => {
+    const validRows = productRows.filter(row => row.category && row.option);
+
+    // 공급가 총합
+    const supplyTotal = validRows.reduce(
+      (sum, row) => sum + (row.supplyPrice * row.quantity),
+      0
+    );
+
+    // 브랜드별 MAX 배송비 계산
+    const brandMaxShipping = new Map<string, number>();
+    validRows.forEach(row => {
+      if (row.brand) {
+        const currentMax = brandMaxShipping.get(row.brand) || 0;
+        brandMaxShipping.set(row.brand, Math.max(currentMax, row.shippingFee));
       }
+    });
 
-      return sum + orderTotal;
-    }, 0);
+    const shippingTotal = Array.from(brandMaxShipping.values()).reduce(
+      (sum, fee) => sum + fee,
+      0
+    );
+
+    return {
+      supplyTotal,
+      shippingTotal,
+      total: supplyTotal + shippingTotal,
+      itemCount: validRows.length,
+      totalQuantity: validRows.reduce((sum, row) => sum + row.quantity, 0)
+    };
   };
 
   const totalAmount = calculateTotalWithGroupedShipping();
+  const singleModePreview = calculateSingleModePreview();
 
   return (
     <div className="space-y-8">
@@ -852,16 +967,50 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
               </button>
 
               {/* 합계 표시 */}
+              {/* 🔔 실시간 예상 금액 표시 */}
               {productRows.some(r => r.supplyPrice > 0) && (
-                <div className="rounded-lg bg-[#238636]/10 border border-[#238636]/30 p-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-[#8b949e]">상품 소계</span>
-                    <span className="text-lg font-bold text-[#3fb950]">
-                      ₩{productRows.reduce((sum, r) => sum + r.supplyPrice * r.quantity, 0).toLocaleString()}
-                    </span>
+                <div className="rounded-xl border-2 border-[#58a6ff] bg-gradient-to-r from-[#58a6ff]/5 to-[#238636]/5 p-5">
+                  <h4 className="text-sm font-bold text-[#58a6ff] mb-4 flex items-center gap-2">
+                    💰 실시간 예상 결제 금액
+                  </h4>
+
+                  <div className="space-y-3">
+                    {/* 공급가 합계 */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-[#8b949e]">상품 공급가 합계</span>
+                      <span className="text-sm font-medium text-[#f0f6fc]">
+                        ₩{singleModePreview.supplyTotal.toLocaleString()}
+                      </span>
+                    </div>
+
+                    {/* 배송비 그룹화 정보 */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-[#8b949e]">배송비 (브랜드별 MAX 1회)</span>
+                        {singleModePreview.itemCount > 1 && (
+                          <span className="text-xs text-[#3fb950] bg-[#238636]/20 px-2 py-0.5 rounded-full">
+                            {singleModePreview.itemCount - 1}건 차감
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-sm font-medium text-[#f0883e]">
+                        +₩{singleModePreview.shippingTotal.toLocaleString()}
+                      </span>
+                    </div>
+
+                    {/* 총 결제 예상 금액 */}
+                    <div className="border-t border-[#30363d] pt-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-base font-bold text-[#f0f6fc]">예상 결제 금액</span>
+                        <span className="text-xl font-bold text-[#3fb950]">
+                          ₩{singleModePreview.total.toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <p className="text-xs text-[#6e7681] mt-1">
-                    * 동일 주소&amp;브랜드 배송비는 1회만 적용됩니다
+
+                  <p className="text-xs text-[#6e7681] mt-4">
+                    * 동일 주소 + 브랜드 그룹 내 상품의 배송비가 다를 경우, 가장 높은 배송비(MAX)만 1회 적용됩니다.
                   </p>
                 </div>
               )}
