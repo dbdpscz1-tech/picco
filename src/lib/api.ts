@@ -455,3 +455,97 @@ export async function fetchSavedOrders(name?: string, phone?: string): Promise<{
     return { success: false, error: String(error) };
   }
 }
+
+// =====================================
+// 주문 KPI 데이터 (통합 발주서 시트 기반)
+// =====================================
+
+export interface OrderKPIRow {
+  month: string;       // Column C (월별)
+  orderDate: string;   // Column D (발주일)
+  salesCount: number;  // Column P (판매건수)
+  salesMall: string;   // Column AA (판매몰)
+}
+
+export interface OrderKPIData {
+  rows: OrderKPIRow[];
+  years: number[];
+}
+
+// 통합 발주서 시트에서 KPI 데이터 가져오기
+export async function fetchOrderKPIData(): Promise<OrderKPIData | null> {
+  try {
+    const url = getSheetExportUrl(CONFIG.ORDER_HISTORY_GID);
+    const response = await fetch(url);
+    const csvText = await response.text();
+    const rows = parseCSV(csvText);
+
+    if (rows.length < 2) return null;
+
+    const kpiRows: OrderKPIRow[] = [];
+    const yearsSet = new Set<number>();
+
+    // Skip header row (index 0)
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (row.length < 27) continue; // Need at least up to column AA (index 26)
+
+      const month = row[2]?.trim() || "";          // Column C (index 2)
+      const orderDate = row[3]?.trim() || "";      // Column D (index 3)
+      const salesCountRaw = row[15]?.trim() || ""; // Column P (index 15)
+      const salesMall = row[26]?.trim() || "";     // Column AA (index 26)
+
+      // 발주일에서 연도 추출
+      const dateMatch = orderDate.match(/(\d{4})[-/]?\d{1,2}[-/]?\d{1,2}/);
+      if (dateMatch) {
+        yearsSet.add(parseInt(dateMatch[1]));
+      }
+
+      // 판매건수 파싱 (숫자만 추출)
+      const salesCount = parseInt(salesCountRaw.replace(/[^0-9-]/g, "")) || 0;
+
+      // 유효한 데이터만 추가
+      if (orderDate || month) {
+        kpiRows.push({
+          month,
+          orderDate,
+          salesCount,
+          salesMall,
+        });
+      }
+    }
+
+    return {
+      rows: kpiRows,
+      years: Array.from(yearsSet).sort((a, b) => b - a), // 최신 연도 먼저
+    };
+  } catch (error) {
+    console.error("주문 KPI 데이터 로드 실패:", error);
+    return null;
+  }
+}
+
+// 날짜 문자열 정규화 (YYYY-MM-DD 형식으로)
+export function normalizeDateString(dateStr: string): string {
+  if (!dateStr) return "";
+
+  // YYYY-MM-DD, YYYY/MM/DD, YYYYMMDD 형식 지원
+  const match = dateStr.match(/(\d{4})[-/]?(\d{1,2})[-/]?(\d{1,2})/);
+  if (match) {
+    const [, year, month, day] = match;
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  }
+  return dateStr;
+}
+
+// 오늘 날짜 문자열 (YYYY-MM-DD)
+export function getTodayString(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+// 현재 월 문자열 (YYYY-MM)
+export function getCurrentMonthString(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
