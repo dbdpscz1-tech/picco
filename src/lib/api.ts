@@ -378,6 +378,65 @@ export function isOrderInTimeRange(savedTimeStr: string, range: OrderTimeRange):
   return orderTime >= range.start && orderTime < range.end;
 }
 
+// 주문 생성 시각 기준으로 발주 예정일 계산 (11시 기준)
+// 주문이 11시 이전이면 당일, 11시 이후면 다음날
+export function calculateTargetOrderDate(savedTimeStr: string): string {
+  const orderTime = parseOrderTime(savedTimeStr);
+  if (!orderTime) {
+    // 파싱 실패 시 오늘 날짜 반환
+    return getTodayString();
+  }
+
+  // 주문 생성 시각의 11시 기준점 생성
+  const orderDate11am = new Date(
+    orderTime.getFullYear(),
+    orderTime.getMonth(),
+    orderTime.getDate(),
+    11, 0, 0, 0
+  );
+
+  // 주문 시각이 11시 이전이면 당일, 11시 이후면 다음날
+  let targetDate: Date;
+  if (orderTime < orderDate11am) {
+    // 11시 이전: 당일 발주
+    targetDate = new Date(orderTime.getFullYear(), orderTime.getMonth(), orderTime.getDate());
+  } else {
+    // 11시 이후: 다음날 발주
+    targetDate = new Date(orderDate11am);
+    targetDate.setDate(targetDate.getDate() + 1);
+  }
+
+  // YYYY-MM-DD 형식으로 반환
+  const year = targetDate.getFullYear();
+  const month = String(targetDate.getMonth() + 1).padStart(2, "0");
+  const day = String(targetDate.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+// 원본 발주서 업로드 시 자동으로 가져올 개별 주문의 날짜 계산
+// 현재 시간 기준으로 오늘 업로드하는 발주서에 포함될 주문들의 날짜 범위 계산
+export function getAutoTargetDateForUpload(): string {
+  const now = new Date();
+  const today11am = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 11, 0, 0, 0);
+
+  let targetDate: Date;
+  if (now < today11am) {
+    // 현재 시간이 오늘 11시 이전이면: 어제 11시 이후 ~ 오늘 11시 이전 주문들이 오늘 발주
+    // 즉, 어제 날짜의 발주서
+    targetDate = new Date(now);
+    targetDate.setDate(targetDate.getDate() - 1);
+  } else {
+    // 현재 시간이 오늘 11시 이후이면: 오늘 11시 이후 ~ 내일 11시 이전 주문들이 내일 발주
+    // 즉, 오늘 날짜의 발주서
+    targetDate = new Date(now);
+  }
+
+  const year = targetDate.getFullYear();
+  const month = String(targetDate.getMonth() + 1).padStart(2, "0");
+  const day = String(targetDate.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 // 개별주문 저장 타입
 export interface SavedOrder {
   saved_time: string;

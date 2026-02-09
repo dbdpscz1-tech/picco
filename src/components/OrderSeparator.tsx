@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { findBrand, formatDate, fetchSavedOrders, type SavedOrder } from "@/lib/api";
+import { findBrand, formatDate, fetchSavedOrders, calculateTargetOrderDate, getAutoTargetDateForUpload, type SavedOrder } from "@/lib/api";
 import type { MenuDict, ProcessedResults, OrderData } from "@/lib/types";
 import * as XLSX from "xlsx";
 import ExcelJS from "exceljs";
@@ -31,13 +31,13 @@ export default function OrderSeparator({
   const [previewBrand, setPreviewBrand] = useState<string>("");
   const [previewOrders, setPreviewOrders] = useState<OrderData[]>([]);
 
-  // 📅 날짜 검색 상태
+  // 📅 날짜 검색 상태 (자동 계산된 날짜로 초기화)
   const [selectedDate, setSelectedDate] = useState<string>(() => {
-    const today = new Date();
-    return today.toISOString().split('T')[0]; // YYYY-MM-DD 형식
+    return getAutoTargetDateForUpload(); // 11시 기준 자동 계산
   });
   const [individualOrders, setIndividualOrders] = useState<SavedOrder[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
+  const [dateSelectionMode, setDateSelectionMode] = useState<"auto" | "manual">("auto");
 
   // 🔀 데이터 병합 상태
   const [mergedData, setMergedData] = useState<(string | number | null)[][] | null>(null);
@@ -57,17 +57,24 @@ export default function OrderSeparator({
     setPreviewOrders([]);
   };
 
-  // 📅 선택한 날짜의 개별주문 데이터 조회
+  // 📅 선택한 날짜의 개별주문 데이터 조회 (11시 기준 날짜 판별 적용)
   const fetchOrdersByDate = async () => {
     setLoadingOrders(true);
     try {
       const result = await fetchSavedOrders();
       if (result.success && result.orders) {
-        // 선택한 날짜에 해당하는 주문만 필터링
+        // 선택한 날짜(발주 예정일)에 해당하는 주문만 필터링
+        // 각 주문의 생성 시각을 기준으로 11시 cut-off를 적용하여 발주 예정일 계산
         const targetDate = selectedDate.replace(/-/g, '');
         const filtered = result.orders.filter(order => {
-          const orderDate = order.saved_time?.split(' ')[0]?.replace(/-/g, '') || '';
-          return orderDate === targetDate;
+          if (!order.saved_time) return false;
+          
+          // 주문 생성 시각 기준으로 발주 예정일 계산 (11시 기준)
+          const orderTargetDate = calculateTargetOrderDate(order.saved_time);
+          const orderTargetDateStr = orderTargetDate.replace(/-/g, '');
+          
+          // 계산된 발주 예정일이 선택한 날짜와 일치하는지 확인
+          return orderTargetDateStr === targetDate;
         });
         setIndividualOrders(filtered);
       }
@@ -76,6 +83,13 @@ export default function OrderSeparator({
     } finally {
       setLoadingOrders(false);
     }
+  };
+
+  // 자동 날짜 계산 버튼 클릭 핸들러
+  const handleAutoCalculateDate = () => {
+    const autoDate = getAutoTargetDateForUpload();
+    setSelectedDate(autoDate);
+    setDateSelectionMode("auto");
   };
 
   // 날짜 변경 시 자동 조회
@@ -149,6 +163,8 @@ export default function OrderSeparator({
   };
 
   // 🔀 Step 2: 데이터 병합 (원본 발주서 + 개별주문)
+  // 개별 주문은 fetchOrdersByDate에서 11시 기준으로 필터링된 주문들입니다.
+  // 각 주문의 생성 시각(createdAt)이 11시 이전이면 당일, 11시 이후면 다음날 발주에 포함됩니다.
   const handleMergeData = () => {
     if (!sourceData) {
       alert("먼저 원본 발주서를 업로드하세요");
@@ -161,6 +177,7 @@ export default function OrderSeparator({
 
     // 개별주문을 원본 발주서 형식에 맞게 변환
     // 배송비 중복 제거 로직 적용 (동일 주소+브랜드 그룹에서 MAX 배송비만)
+    // 참고: individualOrders는 이미 11시 기준으로 필터링된 주문들입니다.
     const brandMaxShipping = new Map<string, number>();
     individualOrders.forEach(order => {
       // 브랜드 찾기 - 상품명에서 추출 또는 메뉴 데이터 활용
@@ -453,9 +470,19 @@ export default function OrderSeparator({
             <input
               type="date"
               value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
+              onChange={(e) => {
+                setSelectedDate(e.target.value);
+                setDateSelectionMode("manual");
+              }}
               className="rounded-lg border border-[#30363d] bg-[#161b22] px-4 py-2 text-sm text-[#f0f6fc] focus:border-[#58a6ff] focus:outline-none"
             />
+            <button
+              onClick={handleAutoCalculateDate}
+              className="rounded-lg bg-[#238636] px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-[#2ea043]"
+              title="11시 기준으로 자동 계산된 날짜로 설정"
+            >
+              ⚡ 자동 계산
+            </button>
             <button
               onClick={fetchOrdersByDate}
               disabled={loadingOrders}
@@ -464,6 +491,21 @@ export default function OrderSeparator({
               {loadingOrders ? "조회 중..." : "🔄 새로고침"}
             </button>
           </div>
+        </div>
+
+        {/* 날짜 선택 모드 표시 */}
+        <div className="mb-4 rounded-lg bg-[#21262d] p-3">
+          <p className="text-xs text-[#8b949e] mb-2">
+            {dateSelectionMode === "auto" ? (
+              <span className="text-[#3fb950]">✅ 자동 모드: 11시 기준으로 계산된 날짜</span>
+            ) : (
+              <span className="text-[#f0883e]">✏️ 수동 모드: 직접 선택한 날짜</span>
+            )}
+          </p>
+          <p className="text-xs text-[#6e7681]">
+            💡 주문 생성 시각이 <span className="text-[#58a6ff] font-medium">오전 11시 이전</span>이면 당일 발주,
+            <span className="text-[#58a6ff] font-medium"> 오전 11시 이후</span>이면 다음날 발주에 포함됩니다.
+          </p>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -543,9 +585,11 @@ export default function OrderSeparator({
         </h2>
 
         <p className="mb-4 text-sm text-[#8b949e]">
-          원본 발주서 데이터와 {selectedDate} 날짜의 개별 주문 {individualOrders.length}건을 병합합니다.
+          원본 발주서 데이터와 <span className="text-[#58a6ff] font-medium">{selectedDate}</span> 날짜의 개별 주문 <span className="text-[#3fb950] font-medium">{individualOrders.length}</span>건을 병합합니다.
           <br />
           <span className="text-[#f0883e]">* 동일 주소+브랜드 그룹에서 MAX 배송비 1회만 적용됩니다.</span>
+          <br />
+          <span className="text-[#6e7681] text-xs">* 개별 주문은 생성 시각 기준 11시 cut-off로 자동 필터링됩니다.</span>
         </p>
 
         {sourceData && individualOrders.length > 0 ? (
