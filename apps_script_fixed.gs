@@ -130,17 +130,6 @@ function doGet(e) {
     const searchPhone = e.parameter.phone || "";
     const searchMode = searchName || searchPhone; // 검색 모드 여부
     
-    const now = new Date();
-    const koreaTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
-    
-    // 오늘 11시 기준점 계산 (검색 모드가 아닐 때만 사용)
-    let cutoffTime = new Date(koreaTime);
-    cutoffTime.setHours(11, 0, 0, 0);
-    
-    if (koreaTime < cutoffTime) {
-      cutoffTime.setDate(cutoffTime.getDate() - 1);
-    }
-    
     // 데이터 필터링
     const orders = [];
     for (let i = 1; i < data.length; i++) {
@@ -166,17 +155,24 @@ function doGet(e) {
         const phoneMatch = !searchPhone || rowPhone.includes(searchPhone);
         shouldInclude = nameMatch && phoneMatch;
       } else {
-        // 기본 모드: 11시 기준 필터링
-        shouldInclude = savedTime >= cutoffTime;
-      }
-      
-      if (shouldInclude) {
+        // 기본 모드: M 칼럼 기반 필터링만 적용 (시간 기준 없음)
         // 상태 필드 확인 (M 컬럼, 인덱스 12)
         const status = row[12] || "";
         
-        // '발주완료'가 아닌 항목만 필터링 (비어있는 항목 포함, 검색 모드가 아닐 때만)
-        if (!searchMode && status === "발주완료") {
+        // '발주완료'가 아닌 항목만 포함 (비어있는 항목 포함)
+        if (status === "발주완료") {
           continue;
+        }
+        
+        shouldInclude = true;
+      }
+      
+      if (shouldInclude) {
+        // 검색 모드일 때는 상태 필터링 없이 모든 주문 반환
+        if (searchMode) {
+          // 검색 모드에서는 상태 필터링 없음
+        } else {
+          // 기본 모드에서는 이미 위에서 필터링됨
         }
         
         orders.push({

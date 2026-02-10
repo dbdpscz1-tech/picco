@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { findBrand, formatDate, fetchSavedOrders, calculateTargetOrderDate, getAutoTargetDateForUpload, updateOrderStatus, type SavedOrder } from "@/lib/api";
+import { findBrand, formatDate, fetchSavedOrders, updateOrderStatus, type SavedOrder } from "@/lib/api";
 import type { MenuDict, ProcessedResults, OrderData } from "@/lib/types";
 import * as XLSX from "xlsx";
 import ExcelJS from "exceljs";
@@ -31,13 +31,9 @@ export default function OrderSeparator({
   const [previewBrand, setPreviewBrand] = useState<string>("");
   const [previewOrders, setPreviewOrders] = useState<OrderData[]>([]);
 
-  // 📅 날짜 검색 상태 (자동 계산된 날짜로 초기화)
-  const [selectedDate, setSelectedDate] = useState<string>(() => {
-    return getAutoTargetDateForUpload(); // 11시 기준 자동 계산
-  });
+  // 미발주 주문 상태
   const [individualOrders, setIndividualOrders] = useState<SavedOrder[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
-  const [dateSelectionMode, setDateSelectionMode] = useState<"auto" | "manual">("auto");
 
   // 🔀 데이터 병합 상태
   const [mergedData, setMergedData] = useState<(string | number | null)[][] | null>(null);
@@ -61,8 +57,8 @@ export default function OrderSeparator({
     setPreviewOrders([]);
   };
 
-  // 📅 미발주 주문 데이터 조회 (M 칼럼이 '발주완료'가 아닌 항목만)
-  const fetchOrdersByDate = async () => {
+  // 📋 미발주 주문 데이터 조회 (M 칼럼이 비어있거나 '발주완료'가 아닌 항목만)
+  const fetchPendingOrders = async () => {
     setLoadingOrders(true);
     try {
       const result = await fetchSavedOrders();
@@ -82,20 +78,11 @@ export default function OrderSeparator({
         setSelectedOrderIds(new Set());
       }
     } catch (error) {
-      console.error("개별주문 조회 실패:", error);
+      console.error("미발주 주문 조회 실패:", error);
     } finally {
       setLoadingOrders(false);
     }
   };
-
-  // 자동 날짜 계산 버튼 클릭 핸들러
-  const handleAutoCalculateDate = () => {
-    const autoDate = getAutoTargetDateForUpload();
-    setSelectedDate(autoDate);
-    setDateSelectionMode("auto");
-  };
-
-  // 날짜 변경 시 자동 조회 비활성화 (수동 조회만 가능)
 
   // 발주서 처리 함수
   const processOrders = (
@@ -199,9 +186,13 @@ export default function OrderSeparator({
       const result = await updateOrderStatus(orderIds, "발주완료");
       
       if (result.success) {
+        // 즉시 화면에서 제거 (필터링)
+        setIndividualOrders(prevOrders => 
+          prevOrders.filter(order => !selectedOrderIds.has(order.saved_time))
+        );
+        // 선택 상태 초기화
+        setSelectedOrderIds(new Set());
         alert(`✅ ${result.count || orderIds.length}건의 주문이 발주 완료 처리되었습니다.`);
-        // 목록 새로고침
-        await fetchOrdersByDate();
       } else {
         alert(`발주 완료 처리 실패: ${result.error}`);
       }
@@ -527,7 +518,7 @@ export default function OrderSeparator({
             📋 발주 대상 주문 조회
           </h2>
           <button
-            onClick={fetchOrdersByDate}
+            onClick={fetchPendingOrders}
             disabled={loadingOrders}
             className="rounded-lg bg-[#238636] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#2ea043] disabled:opacity-50"
           >
@@ -536,14 +527,25 @@ export default function OrderSeparator({
         </div>
 
         {/* 대기 건수 노출 */}
-        <div className="mb-4 rounded-lg bg-[#21262d] p-4">
-          <p className="text-base font-semibold text-[#f0f6fc]">
-            현재 발주 대기 중인 주문은 총 <span className="text-[#3fb950] text-xl font-bold">{loadingOrders ? "..." : individualOrders.length}</span>건입니다
-          </p>
-          <p className="text-xs text-[#8b949e] mt-2">
-            💡 M 칼럼이 '발주완료'가 아닌 주문만 표시됩니다. (비어있는 항목 포함)
-          </p>
-        </div>
+        {individualOrders.length > 0 ? (
+          <div className="mb-4 rounded-lg bg-[#21262d] p-4">
+            <p className="text-base font-semibold text-[#f0f6fc]">
+              현재 발주 대기 중인 주문은 총 <span className="text-[#3fb950] text-xl font-bold">{individualOrders.length}</span>건입니다
+            </p>
+            <p className="text-xs text-[#8b949e] mt-2">
+              💡 M 칼럼이 비어있거나 '발주완료'가 아닌 주문만 표시됩니다.
+            </p>
+          </div>
+        ) : (
+          <div className="mb-4 rounded-lg bg-[#21262d] p-4 text-center">
+            <p className="text-base font-semibold text-[#8b949e]">
+              현재 발주 대기 중인 주문 건이 없습니다.
+            </p>
+            <p className="text-xs text-[#6e7681] mt-2">
+              💡 모든 주문이 발주 완료되었거나, 미발주 주문 조회 버튼을 눌러주세요.
+            </p>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-4">
           <div className="rounded-lg bg-[#238636]/10 border border-[#238636]/30 p-4 text-center">
@@ -576,9 +578,9 @@ export default function OrderSeparator({
                   <button
                     onClick={handleCompleteOrders}
                     disabled={completingOrders}
-                    className="rounded-lg bg-[#238636] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[#2ea043] disabled:opacity-50"
+                    className="rounded-lg bg-[#238636] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#2ea043] disabled:opacity-50"
                   >
-                    {completingOrders ? "처리 중..." : `✅ 발주 완료 (${selectedOrderIds.size}건)`}
+                    {completingOrders ? "처리 중..." : `✅ 발주완료 처리 (${selectedOrderIds.size}건)`}
                   </button>
                 )}
               </div>
@@ -633,12 +635,7 @@ export default function OrderSeparator({
               </table>
             </div>
           </div>
-        ) : (
-          <div className="mt-6 rounded-lg border border-[#30363d] bg-[#161b22] p-8 text-center">
-            <p className="text-[#8b949e]">📭 발주 대상 주문 없음</p>
-            <p className="text-xs text-[#6e7681] mt-2">선택한 날짜에 미발주 상태인 주문이 없습니다.</p>
-          </div>
-        )}
+        ) : null}
       </section>
 
       {/* 3단계 진행 표시 */}
@@ -706,7 +703,7 @@ export default function OrderSeparator({
           {selectedOrderIds.size > 0 ? (
             <span className="text-[#3fb950] font-medium"> 선택된 {selectedOrderIds.size}건</span>
           ) : (
-            <span className="text-[#f0883e]"> ⚠️ 주문을 선택해주세요 (전체 {individualOrders.length}건 중)</span>
+            <span className="text-[#f0883e]"> ⚠️ 주문을 선택해주세요</span>
           )}
           <br />
           <span className="text-[#f0883e]">* 동일 주소+브랜드 그룹에서 MAX 배송비 1회만 적용됩니다.</span>
@@ -776,7 +773,7 @@ export default function OrderSeparator({
                   disabled={completingOrders}
                   className="rounded-lg bg-[#238636] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#2ea043] disabled:opacity-50"
                 >
-                  {completingOrders ? "처리 중..." : "✅ 발주 완료"}
+                  {completingOrders ? "처리 중..." : `✅ 발주완료 처리 (${selectedOrderIds.size}건)`}
                 </button>
               )}
             </div>
