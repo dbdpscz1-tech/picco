@@ -172,10 +172,10 @@ function doGet(e) {
       
       if (shouldInclude) {
         // 상태 필드 확인 (M 컬럼, 인덱스 12)
-        const status = row[12] || "대기";
+        const status = row[12] || "";
         
-        // 미발주(대기) 상태만 필터링 (검색 모드가 아닐 때만)
-        if (!searchMode && status !== "대기") {
+        // '발주완료'가 아닌 항목만 필터링 (비어있는 항목 포함, 검색 모드가 아닐 때만)
+        if (!searchMode && status === "발주완료") {
           continue;
         }
         

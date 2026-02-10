@@ -61,27 +61,21 @@ export default function OrderSeparator({
     setPreviewOrders([]);
   };
 
-  // 📅 선택한 날짜의 개별주문 데이터 조회 (11시 기준 날짜 판별 적용, 미발주 상태만)
+  // 📅 미발주 주문 데이터 조회 (M 칼럼이 '발주완료'가 아닌 항목만)
   const fetchOrdersByDate = async () => {
     setLoadingOrders(true);
     try {
       const result = await fetchSavedOrders();
       if (result.success && result.orders) {
-        // 선택한 날짜(발주 예정일)에 해당하는 주문만 필터링
-        // 각 주문의 생성 시각을 기준으로 11시 cut-off를 적용하여 발주 예정일 계산
-        const targetDate = selectedDate.replace(/-/g, '');
+        // M 칼럼 상태 필터링: '발주완료'가 아닌 항목만 (비어있는 항목 포함)
         const filtered = result.orders.filter(order => {
           if (!order.saved_time) return false;
           
-          // 주문 생성 시각 기준으로 발주 예정일 계산 (11시 기준)
-          const orderTargetDate = calculateTargetOrderDate(order.saved_time);
-          const orderTargetDateStr = orderTargetDate.replace(/-/g, '');
+          // 상태가 '발주완료'가 아닌 항목만 (비어있거나 다른 값)
+          const status = order.status || "";
+          const isNotCompleted = status !== "발주완료";
           
-          // 계산된 발주 예정일이 선택한 날짜와 일치하고, 상태가 '대기'인 주문만
-          const isTargetDate = orderTargetDateStr === targetDate;
-          const isPending = !order.status || order.status === "대기";
-          
-          return isTargetDate && isPending;
+          return isNotCompleted;
         });
         setIndividualOrders(filtered);
         // 선택 상태 초기화
@@ -101,10 +95,7 @@ export default function OrderSeparator({
     setDateSelectionMode("auto");
   };
 
-  // 날짜 변경 시 자동 조회
-  useEffect(() => {
-    fetchOrdersByDate();
-  }, [selectedDate]);
+  // 날짜 변경 시 자동 조회 비활성화 (수동 조회만 가능)
 
   // 발주서 처리 함수
   const processOrders = (
@@ -205,7 +196,7 @@ export default function OrderSeparator({
     setCompletingOrders(true);
     try {
       const orderIds = Array.from(selectedOrderIds);
-      const result = await updateOrderStatus(orderIds, "완료");
+      const result = await updateOrderStatus(orderIds, "발주완료");
       
       if (result.success) {
         alert(`✅ ${result.count || orderIds.length}건의 주문이 발주 완료 처리되었습니다.`);
@@ -529,51 +520,28 @@ export default function OrderSeparator({
 
   return (
     <div className="space-y-8">
-      {/* 📅 발주 대상 날짜 선택 */}
+      {/* 📋 발주 대상 주문 조회 */}
       <section className="rounded-xl border-2 border-[#58a6ff] bg-gradient-to-r from-[#0d1117] to-[#161b22] p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold text-[#58a6ff] flex items-center gap-2">
-            📅 발주 대상 날짜 선택
+            📋 발주 대상 주문 조회
           </h2>
-          <div className="flex items-center gap-3">
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => {
-                setSelectedDate(e.target.value);
-                setDateSelectionMode("manual");
-              }}
-              className="rounded-lg border border-[#30363d] bg-[#161b22] px-4 py-2 text-sm text-[#f0f6fc] focus:border-[#58a6ff] focus:outline-none"
-            />
-            <button
-              onClick={handleAutoCalculateDate}
-              className="rounded-lg bg-[#238636] px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-[#2ea043]"
-              title="11시 기준으로 자동 계산된 날짜로 설정"
-            >
-              ⚡ 자동 계산
-            </button>
-            <button
-              onClick={fetchOrdersByDate}
-              disabled={loadingOrders}
-              className="rounded-lg bg-[#21262d] px-3 py-2 text-xs font-medium text-[#8b949e] transition-colors hover:bg-[#30363d] hover:text-[#f0f6fc] disabled:opacity-50"
-            >
-              {loadingOrders ? "조회 중..." : "🔄 새로고침"}
-            </button>
-          </div>
+          <button
+            onClick={fetchOrdersByDate}
+            disabled={loadingOrders}
+            className="rounded-lg bg-[#238636] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#2ea043] disabled:opacity-50"
+          >
+            {loadingOrders ? "조회 중..." : "🔄 미발주 주문 조회"}
+          </button>
         </div>
 
-        {/* 날짜 선택 모드 표시 */}
-        <div className="mb-4 rounded-lg bg-[#21262d] p-3">
-          <p className="text-xs text-[#8b949e] mb-2">
-            {dateSelectionMode === "auto" ? (
-              <span className="text-[#3fb950]">✅ 자동 모드: 11시 기준으로 계산된 날짜</span>
-            ) : (
-              <span className="text-[#f0883e]">✏️ 수동 모드: 직접 선택한 날짜</span>
-            )}
+        {/* 대기 건수 노출 */}
+        <div className="mb-4 rounded-lg bg-[#21262d] p-4">
+          <p className="text-base font-semibold text-[#f0f6fc]">
+            현재 발주 대기 중인 주문은 총 <span className="text-[#3fb950] text-xl font-bold">{loadingOrders ? "..." : individualOrders.length}</span>건입니다
           </p>
-          <p className="text-xs text-[#6e7681]">
-            💡 주문 생성 시각이 <span className="text-[#58a6ff] font-medium">오전 11시 이전</span>이면 당일 발주,
-            <span className="text-[#58a6ff] font-medium"> 오전 11시 이후</span>이면 다음날 발주에 포함됩니다.
+          <p className="text-xs text-[#8b949e] mt-2">
+            💡 M 칼럼이 '발주완료'가 아닌 주문만 표시됩니다. (비어있는 항목 포함)
           </p>
         </div>
 
@@ -734,32 +702,34 @@ export default function OrderSeparator({
         </h2>
 
         <p className="mb-4 text-sm text-[#8b949e]">
-          원본 발주서 데이터와 <span className="text-[#58a6ff] font-medium">{selectedDate}</span> 날짜의 개별 주문을 병합합니다.
+          원본 발주서 데이터와 선택한 개별 주문을 병합합니다.
           {selectedOrderIds.size > 0 ? (
             <span className="text-[#3fb950] font-medium"> 선택된 {selectedOrderIds.size}건</span>
           ) : (
-            <span className="text-[#3fb950] font-medium"> 전체 {individualOrders.length}건</span>
+            <span className="text-[#f0883e]"> ⚠️ 주문을 선택해주세요 (전체 {individualOrders.length}건 중)</span>
           )}
           <br />
           <span className="text-[#f0883e]">* 동일 주소+브랜드 그룹에서 MAX 배송비 1회만 적용됩니다.</span>
           <br />
-          <span className="text-[#6e7681] text-xs">* 개별 주문은 생성 시각 기준 11시 cut-off로 자동 필터링되며, 미발주(대기) 상태만 표시됩니다.</span>
+          <span className="text-[#6e7681] text-xs">* 미발주 주문 조회 버튼을 눌러 주문 목록을 불러온 후, 체크박스로 선택한 주문만 병합됩니다.</span>
         </p>
 
-        {sourceData && individualOrders.length > 0 ? (
+        {sourceData && individualOrders.length > 0 && selectedOrderIds.size > 0 ? (
           <button
             onClick={handleMergeData}
             className="w-full rounded-lg bg-[#58a6ff] px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-[#388bfd]"
           >
-            🔀 데이터 병합 실행 (원본 {sourceData.length - 1}건 + 개별 {selectedOrderIds.size > 0 ? selectedOrderIds.size : individualOrders.length}건)
+            🔀 데이터 병합 실행 (원본 {sourceData.length - 1}건 + 개별 {selectedOrderIds.size}건)
           </button>
         ) : (
           <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-4 text-center text-sm text-[#8b949e]">
             {!sourceData
               ? "Step 1에서 원본 발주서를 먼저 업로드하세요"
               : individualOrders.length === 0
-                ? `${selectedDate} 날짜의 미발주 주문이 없습니다`
-                : "병합 준비 완료"}
+                ? "미발주 주문 조회 버튼을 눌러 주문을 불러오세요"
+                : selectedOrderIds.size === 0
+                  ? "위 목록에서 병합할 주문을 선택해주세요"
+                  : "병합 준비 완료"}
           </div>
         )}
 

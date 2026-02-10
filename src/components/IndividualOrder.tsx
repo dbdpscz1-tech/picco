@@ -819,6 +819,32 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
             <div className="space-y-4">
               <h4 className="text-sm font-medium text-[#58a6ff]">📍 배송지 정보 (한 번만 입력)</h4>
 
+              {/* 주문자 정보 */}
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm text-[#8b949e]">주문자명</label>
+                  <input
+                    type="text"
+                    value={ordererName}
+                    onChange={(e) => setOrdererName(e.target.value)}
+                    placeholder="수취인과 동일 시 생략 가능"
+                    className="w-full rounded-lg border border-[#30363d] bg-[#0d1117] px-3 py-2 text-sm text-[#f0f6fc] focus:border-[#58a6ff] focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm text-[#8b949e]">주문자 전화번호</label>
+                  <input
+                    type="text"
+                    value={ordererPhone}
+                    onChange={(e) => setOrdererPhone(e.target.value)}
+                    placeholder="010-0000-0000 (수취인과 동일 시 생략 가능)"
+                    className="w-full rounded-lg border border-[#30363d] bg-[#0d1117] px-3 py-2 text-sm text-[#f0f6fc] focus:border-[#58a6ff] focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="border-t border-[#30363d] pt-4" />
+
               {/* 수취인 정보 */}
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
@@ -1099,6 +1125,32 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
                   </p>
                 </div>
               )}
+
+              {/* 주문자 정보 */}
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm text-[#8b949e]">주문자명</label>
+                  <input
+                    type="text"
+                    value={ordererName}
+                    onChange={(e) => setOrdererName(e.target.value)}
+                    placeholder="수취인과 동일 시 생략 가능"
+                    className="w-full rounded-lg border border-[#30363d] bg-[#0d1117] px-3 py-2 text-sm text-[#f0f6fc] focus:border-[#58a6ff] focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm text-[#8b949e]">주문자 전화번호</label>
+                  <input
+                    type="text"
+                    value={ordererPhone}
+                    onChange={(e) => setOrdererPhone(e.target.value)}
+                    placeholder="010-0000-0000 (수취인과 동일 시 생략 가능)"
+                    className="w-full rounded-lg border border-[#30363d] bg-[#0d1117] px-3 py-2 text-sm text-[#f0f6fc] focus:border-[#58a6ff] focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="border-t border-[#30363d] pt-4" />
 
               {/* 수취인 정보 */}
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
