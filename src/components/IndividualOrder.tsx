@@ -65,6 +65,8 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
   const [quantity, setQuantity] = useState(1);
   const [recipientName, setRecipientName] = useState("");
   const [recipientPhone, setRecipientPhone] = useState("");
+  const [ordererName, setOrdererName] = useState("");  // 주문자명
+  const [ordererPhone, setOrdererPhone] = useState(""); // 주문자 전화번호
   const [address, setAddress] = useState("");
   const [addressDetail, setAddressDetail] = useState("");
   const [zonecode, setZonecode] = useState("");
@@ -229,6 +231,8 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
       supply_price: currentSupplyPrice,
       shipping_fee: currentShippingFee,
       brand,
+      orderer_name: ordererName || recipientName,  // 주문자명 (없으면 수취인명)
+      orderer_phone: ordererPhone || recipientPhone, // 주문자 전화번호 (없으면 수취인 전화번호)
     };
 
     setOrders([...orders, newOrder]);
@@ -236,6 +240,8 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
     // 폼 초기화
     setRecipientName("");
     setRecipientPhone("");
+    setOrdererName("");
+    setOrdererPhone("");
     setAddress("");
     setAddressDetail("");
     setZonecode("");
@@ -325,6 +331,8 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
       supply_price: row.supplyPrice,
       shipping_fee: row.shippingFee,
       brand: row.brand,
+      orderer_name: ordererName || recipientName,  // 주문자명 (없으면 수취인명)
+      orderer_phone: ordererPhone || recipientPhone, // 주문자 전화번호 (없으면 수취인 전화번호)
     }));
 
     setOrders([...orders, ...newOrders]);
@@ -332,6 +340,8 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
     // 폼 초기화
     setRecipientName("");
     setRecipientPhone("");
+    setOrdererName("");
+    setOrdererPhone("");
     setAddress("");
     setAddressDetail("");
     setZonecode("");
@@ -375,8 +385,8 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
         택배사: "",
         송장번호: "",
         택배비: order.shipping_fee, // 다중 모드: 각각 배송비 그대로 적용
-        주문자명: order.recipient_name,
-        주문자전화번호1: order.recipient_phone,
+        주문자명: order.orderer_name || order.recipient_name,  // K 컬럼
+        주문자전화번호1: order.orderer_phone || order.recipient_phone, // L 컬럼
         TEMP5: "",
         비고: "",
         "쇼핑몰명(1)": "개별주문",
@@ -422,8 +432,8 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
           택배사: "",
           송장번호: "",
           택배비: appliedShippingFee, // 그룹별 MAX 배송비, 첫 항목에만 적용
-          주문자명: order.recipient_name,
-          주문자전화번호1: order.recipient_phone,
+          주문자명: order.orderer_name || order.recipient_name,  // K 컬럼
+          주문자전화번호1: order.orderer_phone || order.recipient_phone, // L 컬럼
           TEMP5: "",
           비고: isFirstInGroup ? "" : "(동일그룹 배송비 차감)",
           "쇼핑몰명(1)": "개별주문",
@@ -1438,8 +1448,8 @@ export default function IndividualOrder({ menuFull, setMenuFull }: IndividualOrd
                     택배사: "",
                     송장번호: "",
                     택배비: order.shipping_fee,
-                    주문자명: order.recipient_name,
-                    주문자전화번호1: order.recipient_phone,
+                    주문자명: order.orderer_name || order.recipient_name,  // K 컬럼
+                    주문자전화번호1: order.orderer_phone || order.recipient_phone, // L 컬럼
                     TEMP5: "",
                     비고: "",
                     "쇼핑몰명(1)": "개별주문",

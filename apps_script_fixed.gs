@@ -13,7 +13,7 @@
 const SPREADSHEET_ID = "1aN2RI_hF0Nq6sfPm5yH3_thYmFKuY3CAgnMIaCEB6yk";
 const SHEET_NAME = "피코 개별주문 시트"; // 정확한 시트 이름
 
-// POST 요청 처리 (주문 저장)
+// POST 요청 처리 (주문 저장 및 상태 업데이트)
 function doPost(e) {
   try {
     // CORS 헤더 설정
@@ -29,6 +29,11 @@ function doPost(e) {
       data = JSON.parse(e.postData.contents);
     } catch (parseError) {
       return createJsonResponse({ success: false, error: "Invalid JSON: " + parseError.message }, headers);
+    }
+
+    // action 필드로 구분: "update_status"면 상태 업데이트, 아니면 주문 저장
+    if (data.action === "update_status") {
+      return updateOrderStatus(data, headers);
     }
 
     const orders = data.orders;
@@ -61,6 +66,7 @@ function doPost(e) {
       const total = (order.supply_price * order.quantity) + order.shipping_fee;
       
       // A: 저장시간, B: 수취인명, C: 전화번호, D: 주소, E: 상품명, F: 옵션, G: 수량, H: 공급가, I: 택배비, J: 합계
+      // K: 주문자명, L: 주문자 전화번호, M: 상태
       const row = [
         koreaTime,           // A: 저장시간
         order.recipient_name,  // B: 수취인명
@@ -71,7 +77,10 @@ function doPost(e) {
         order.quantity,        // G: 수량
         order.supply_price,    // H: 공급가
         order.shipping_fee,    // I: 택배비
-        total                  // J: 합계
+        total,                 // J: 합계
+        order.orderer_name || order.recipient_name || "",  // K: 주문자명
+        order.orderer_phone || order.recipient_phone || "", // L: 주문자 전화번호
+        "대기"                  // M: 상태 (기본값: 대기)
       ];
       
       sheet.appendRow(row);
@@ -162,6 +171,14 @@ function doGet(e) {
       }
       
       if (shouldInclude) {
+        // 상태 필드 확인 (M 컬럼, 인덱스 12)
+        const status = row[12] || "대기";
+        
+        // 미발주(대기) 상태만 필터링 (검색 모드가 아닐 때만)
+        if (!searchMode && status !== "대기") {
+          continue;
+        }
+        
         orders.push({
           saved_time: Utilities.formatDate(savedTime, "Asia/Seoul", "yyyy-MM-dd HH:mm:ss"),
           recipient_name: row[1] || "",
@@ -172,7 +189,10 @@ function doGet(e) {
           quantity: row[6] || 0,
           supply_price: row[7] || 0,
           shipping_fee: row[8] || 0,
-          total: row[9] || 0
+          total: row[9] || 0,
+          orderer_name: row[10] || "",      // K: 주문자명
+          orderer_phone: row[11] || "",     // L: 주문자 전화번호
+          status: status                    // M: 상태
         });
       }
     }
@@ -210,6 +230,67 @@ function createJsonResponse(data, headers) {
   return output;
 }
 
+// 주문 상태 업데이트 함수
+function updateOrderStatus(data, headers) {
+  try {
+    const orderIds = data.order_ids; // 주문 ID 배열 (saved_time 문자열 배열)
+    const newStatus = data.status || "완료";
+
+    if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+      return createJsonResponse({ success: false, error: "No order IDs provided" }, headers);
+    }
+
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    let sheet = ss.getSheetByName(SHEET_NAME);
+    
+    if (!sheet) {
+      return createJsonResponse({ 
+        success: false, 
+        error: "시트를 찾을 수 없음: " + SHEET_NAME 
+      }, headers);
+    }
+
+    const dataRange = sheet.getDataRange();
+    const values = dataRange.getValues();
+    
+    // 헤더 행이 있으므로 인덱스는 1부터 시작
+    let updatedCount = 0;
+    
+    // saved_time을 기준으로 주문 찾기
+    for (let i = 1; i < values.length; i++) {
+      const row = values[i];
+      const savedTimeStr = row[0];
+      
+      // saved_time을 문자열로 변환하여 비교
+      let savedTimeStrFormatted = "";
+      if (savedTimeStr instanceof Date) {
+        savedTimeStrFormatted = Utilities.formatDate(savedTimeStr, "Asia/Seoul", "yyyy-MM-dd HH:mm:ss");
+      } else {
+        savedTimeStrFormatted = String(savedTimeStr);
+      }
+      
+      // 주문 ID는 saved_time 문자열로 매칭
+      if (orderIds.includes(savedTimeStrFormatted)) {
+        // M 컬럼 (인덱스 12)에 상태 업데이트
+        sheet.getRange(i + 1, 13).setValue(newStatus); // M 컬럼 = 13번째 열
+        updatedCount++;
+      }
+    }
+
+    return createJsonResponse({ 
+      success: true, 
+      count: updatedCount,
+      message: updatedCount + "건의 상태가 '" + newStatus + "'로 업데이트되었습니다"
+    }, headers);
+    
+  } catch (error) {
+    return createJsonResponse({ 
+      success: false, 
+      error: error.toString() 
+    }, headers);
+  }
+}
+
 // 테스트 함수 (스크립트 에디터에서 직접 실행 가능)
 function testPost() {
   const testEvent = {
@@ -223,7 +304,9 @@ function testPost() {
           option: "테스트 옵션",
           quantity: 1,
           supply_price: 10000,
-          shipping_fee: 3000
+          shipping_fee: 3000,
+          orderer_name: "테스트 주문자",
+          orderer_phone: "010-1234-5678"
         }]
       })
     }

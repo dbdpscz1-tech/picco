@@ -449,6 +449,9 @@ export interface SavedOrder {
   supply_price: number;
   shipping_fee: number;
   total: number;
+  orderer_name?: string;  // K: 주문자명
+  orderer_phone?: string;  // L: 주문자 전화번호
+  status?: string;        // M: 상태 (대기/완료)
 }
 
 // 개별주문 저장 (Google Apps Script로 전송)
@@ -464,6 +467,8 @@ export async function saveIndividualOrders(orders: {
   brand?: string;
   original_shipping_fee?: number;  // 원본 배송비 (그룹화 전)
   is_shipping_grouped?: boolean;   // 배송비 그룹화로 0원 처리 여부
+  orderer_name?: string;           // K: 주문자명
+  orderer_phone?: string;          // L: 주문자 전화번호
 }[]): Promise<{ success: boolean; count?: number; error?: string }> {
   try {
     const response = await fetch(CONFIG.APPS_SCRIPT_URL, {
@@ -607,4 +612,31 @@ export function getTodayString(): string {
 export function getCurrentMonthString(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
+// 주문 상태 업데이트 (발주 완료 처리)
+export async function updateOrderStatus(
+  orderIds: string[], // saved_time 문자열 배열
+  status: string = "완료"
+): Promise<{ success: boolean; count?: number; error?: string }> {
+  try {
+    const response = await fetch(CONFIG.APPS_SCRIPT_URL, {
+      method: "POST",
+      mode: "no-cors", // CORS 우회
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        action: "update_status",
+        order_ids: orderIds,
+        status: status,
+      }),
+    });
+
+    // no-cors 모드에서는 응답을 읽을 수 없으므로 성공으로 간주
+    return { success: true, count: orderIds.length };
+  } catch (error) {
+    console.error("주문 상태 업데이트 실패:", error);
+    return { success: false, error: String(error) };
+  }
 }

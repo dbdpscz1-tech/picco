@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { findBrand, formatDate, fetchSavedOrders, calculateTargetOrderDate, getAutoTargetDateForUpload, type SavedOrder } from "@/lib/api";
+import { findBrand, formatDate, fetchSavedOrders, calculateTargetOrderDate, getAutoTargetDateForUpload, updateOrderStatus, type SavedOrder } from "@/lib/api";
 import type { MenuDict, ProcessedResults, OrderData } from "@/lib/types";
 import * as XLSX from "xlsx";
 import ExcelJS from "exceljs";
@@ -43,6 +43,10 @@ export default function OrderSeparator({
   const [mergedData, setMergedData] = useState<(string | number | null)[][] | null>(null);
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
 
+  // 미발주 주문 선택 상태
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
+  const [completingOrders, setCompletingOrders] = useState(false);
+
   // 미리보기 열기
   const openPreview = (brand: string, orders: OrderData[]) => {
     setPreviewBrand(brand);
@@ -57,7 +61,7 @@ export default function OrderSeparator({
     setPreviewOrders([]);
   };
 
-  // 📅 선택한 날짜의 개별주문 데이터 조회 (11시 기준 날짜 판별 적용)
+  // 📅 선택한 날짜의 개별주문 데이터 조회 (11시 기준 날짜 판별 적용, 미발주 상태만)
   const fetchOrdersByDate = async () => {
     setLoadingOrders(true);
     try {
@@ -73,10 +77,15 @@ export default function OrderSeparator({
           const orderTargetDate = calculateTargetOrderDate(order.saved_time);
           const orderTargetDateStr = orderTargetDate.replace(/-/g, '');
           
-          // 계산된 발주 예정일이 선택한 날짜와 일치하는지 확인
-          return orderTargetDateStr === targetDate;
+          // 계산된 발주 예정일이 선택한 날짜와 일치하고, 상태가 '대기'인 주문만
+          const isTargetDate = orderTargetDateStr === targetDate;
+          const isPending = !order.status || order.status === "대기";
+          
+          return isTargetDate && isPending;
         });
         setIndividualOrders(filtered);
+        // 선택 상태 초기화
+        setSelectedOrderIds(new Set());
       }
     } catch (error) {
       console.error("개별주문 조회 실패:", error);
@@ -162,12 +171,72 @@ export default function OrderSeparator({
     reader.readAsBinaryString(file);
   };
 
-  // 🔀 Step 2: 데이터 병합 (원본 발주서 + 개별주문)
+  // 체크박스 선택/해제 핸들러
+  const handleToggleOrder = (orderId: string) => {
+    const newSelected = new Set(selectedOrderIds);
+    if (newSelected.has(orderId)) {
+      newSelected.delete(orderId);
+    } else {
+      newSelected.add(orderId);
+    }
+    setSelectedOrderIds(newSelected);
+  };
+
+  // 전체 선택/해제 핸들러
+  const handleToggleAll = () => {
+    if (selectedOrderIds.size === individualOrders.length) {
+      setSelectedOrderIds(new Set());
+    } else {
+      setSelectedOrderIds(new Set(individualOrders.map(o => o.saved_time)));
+    }
+  };
+
+  // 발주 완료 처리
+  const handleCompleteOrders = async () => {
+    if (selectedOrderIds.size === 0) {
+      alert("발주 완료할 주문을 선택해주세요");
+      return;
+    }
+
+    if (!confirm(`선택한 ${selectedOrderIds.size}건의 주문을 발주 완료 처리하시겠습니까?`)) {
+      return;
+    }
+
+    setCompletingOrders(true);
+    try {
+      const orderIds = Array.from(selectedOrderIds);
+      const result = await updateOrderStatus(orderIds, "완료");
+      
+      if (result.success) {
+        alert(`✅ ${result.count || orderIds.length}건의 주문이 발주 완료 처리되었습니다.`);
+        // 목록 새로고침
+        await fetchOrdersByDate();
+      } else {
+        alert(`발주 완료 처리 실패: ${result.error}`);
+      }
+    } catch (error) {
+      alert(`발주 완료 처리 중 오류 발생: ${error}`);
+    } finally {
+      setCompletingOrders(false);
+    }
+  };
+
+  // 🔀 Step 2: 데이터 병합 (원본 발주서 + 선택된 개별주문)
   // 개별 주문은 fetchOrdersByDate에서 11시 기준으로 필터링된 주문들입니다.
   // 각 주문의 생성 시각(createdAt)이 11시 이전이면 당일, 11시 이후면 다음날 발주에 포함됩니다.
   const handleMergeData = () => {
     if (!sourceData) {
       alert("먼저 원본 발주서를 업로드하세요");
+      return;
+    }
+
+    // 선택된 주문이 없으면 전체 사용, 있으면 선택된 것만 사용
+    const ordersToMerge = selectedOrderIds.size > 0
+      ? individualOrders.filter(o => selectedOrderIds.has(o.saved_time))
+      : individualOrders;
+
+    if (ordersToMerge.length === 0) {
+      alert("병합할 개별 주문이 없습니다");
       return;
     }
 
@@ -177,9 +246,9 @@ export default function OrderSeparator({
 
     // 개별주문을 원본 발주서 형식에 맞게 변환
     // 배송비 중복 제거 로직 적용 (동일 주소+브랜드 그룹에서 MAX 배송비만)
-    // 참고: individualOrders는 이미 11시 기준으로 필터링된 주문들입니다.
+    // 참고: ordersToMerge는 선택된 주문 또는 전체 주문입니다.
     const brandMaxShipping = new Map<string, number>();
-    individualOrders.forEach(order => {
+    ordersToMerge.forEach(order => {
       // 브랜드 찾기 - 상품명에서 추출 또는 메뉴 데이터 활용
       const brand = findBrand(order.product_name, order.option, menuData);
       const groupKey = `${order.address}::${brand}`;
@@ -188,7 +257,7 @@ export default function OrderSeparator({
     });
 
     const processedGroups = new Set<string>();
-    const individualRows: (string | number | null)[][] = individualOrders.map((order, idx) => {
+    const individualRows: (string | number | null)[][] = ordersToMerge.map((order, idx) => {
       const brand = findBrand(order.product_name, order.option, menuData);
       const groupKey = `${order.address}::${brand}`;
       const isFirstInGroup = !processedGroups.has(groupKey);
@@ -196,31 +265,31 @@ export default function OrderSeparator({
       const appliedShippingFee = isFirstInGroup ? maxShippingForGroup : 0;
       processedGroups.add(groupKey);
 
-      // 원본 발주서 형식에 맞게 데이터 생성 (20개 컬럼 기준)
-      const today = formatDate("YYYYMMDD");
-      return [
-        originalRows.length + idx + 1,         // No.
-        today,                                  // 발주일
-        `IND${today}${String(idx + 1).padStart(4, "0")}`, // 주문번호
-        `개별${String(idx + 1).padStart(4, "0")}`, // 주문번호(쇼핑)
-        "",                                     // 상품코드
-        order.recipient_name,                   // 이름
-        order.recipient_phone,                  // 수취인전화번호1
-        "",                                     // 우편번호
-        order.address,                          // 주소
-        "",                                     // 배송메세지
-        order.product_name,                     // 상품명
-        order.option,                           // 옵션1
-        order.option,                           // 옵션2
-        order.quantity,                         // 수량
-        order.supply_price,                     // 단가
-        "",                                     // 추가비용
-        "",                                     // 특이사항
-        "",                                     // 택배사
-        "",                                     // 운송장
-        appliedShippingFee,                     // 택배비 (그룹별 MAX)
-        order.recipient_name,                   // 보내는사람
-      ];
+        // 원본 발주서 형식에 맞게 데이터 생성 (20개 컬럼 기준)
+        const today = formatDate("YYYYMMDD");
+        return [
+          originalRows.length + idx + 1,         // No.
+          today,                                  // 발주일
+          `IND${today}${String(idx + 1).padStart(4, "0")}`, // 주문번호
+          `개별${String(idx + 1).padStart(4, "0")}`, // 주문번호(쇼핑)
+          "",                                     // 상품코드
+          order.recipient_name,                   // 이름
+          order.recipient_phone,                  // 수취인전화번호1
+          "",                                     // 우편번호
+          order.address,                          // 주소
+          "",                                     // 배송메세지
+          order.product_name,                     // 상품명
+          order.option,                           // 옵션1
+          order.option,                           // 옵션2
+          order.quantity,                         // 수량
+          order.supply_price,                     // 단가
+          "",                                     // 추가비용
+          "",                                     // 특이사항
+          "",                                     // 택배사
+          "",                                     // 운송장
+          appliedShippingFee,                     // 택배비 (그룹별 MAX)
+          order.orderer_name || order.recipient_name,  // 보내는사람 (주문자명 또는 수취인명)
+        ];
     });
 
     // 원본 + 개별주문 병합
@@ -228,7 +297,7 @@ export default function OrderSeparator({
     setMergedData(merged);
     setCurrentStep(2);
 
-    alert(`✅ 데이터 병합 완료!\n\n📊 원본 발주서: ${originalRows.length}건\n📝 개별 주문: ${individualOrders.length}건\n📦 총 병합: ${originalRows.length + individualOrders.length}건`);
+    alert(`✅ 데이터 병합 완료!\n\n📊 원본 발주서: ${originalRows.length}건\n📝 개별 주문: ${ordersToMerge.length}건\n📦 총 병합: ${originalRows.length + ordersToMerge.length}건`);
   };
 
   // 🏷️ Step 3: 브랜드별 분리 실행 (병합 데이터 기준)
@@ -513,7 +582,7 @@ export default function OrderSeparator({
             <p className="text-3xl font-bold text-[#3fb950] mb-1">
               {loadingOrders ? "..." : individualOrders.length}
             </p>
-            <p className="text-xs text-[#8b949e]">개별 주문 건수</p>
+            <p className="text-xs text-[#8b949e]">미발주 주문 건수</p>
           </div>
           <div className="rounded-lg bg-[#58a6ff]/10 border border-[#58a6ff]/30 p-4 text-center">
             <p className="text-2xl font-bold text-[#58a6ff] mb-1">
@@ -522,6 +591,86 @@ export default function OrderSeparator({
             <p className="text-xs text-[#8b949e]">예상 결제 금액</p>
           </div>
         </div>
+
+        {/* 미발주 주문 목록 */}
+        {individualOrders.length > 0 ? (
+          <div className="mt-6 rounded-xl border border-[#30363d] bg-[#161b22]">
+            <div className="border-b border-[#30363d] bg-[#21262d] px-4 py-3 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-[#c9d1d9]">📋 미발주 주문 목록</h3>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleToggleAll}
+                  className="text-xs text-[#58a6ff] hover:underline"
+                >
+                  {selectedOrderIds.size === individualOrders.length ? "전체 해제" : "전체 선택"}
+                </button>
+                {selectedOrderIds.size > 0 && (
+                  <button
+                    onClick={handleCompleteOrders}
+                    disabled={completingOrders}
+                    className="rounded-lg bg-[#238636] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[#2ea043] disabled:opacity-50"
+                  >
+                    {completingOrders ? "처리 중..." : `✅ 발주 완료 (${selectedOrderIds.size}건)`}
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="max-h-96 overflow-auto">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-[#21262d]">
+                  <tr>
+                    <th className="px-4 py-2 text-left">
+                      <input
+                        type="checkbox"
+                        checked={selectedOrderIds.size === individualOrders.length && individualOrders.length > 0}
+                        onChange={handleToggleAll}
+                        className="rounded border-[#30363d] bg-[#0d1117] text-[#238636] focus:ring-[#238636]"
+                      />
+                    </th>
+                    <th className="px-4 py-2 text-left text-[#8b949e]">수취인명</th>
+                    <th className="px-4 py-2 text-left text-[#8b949e]">전화번호</th>
+                    <th className="px-4 py-2 text-left text-[#8b949e]">상품명</th>
+                    <th className="px-4 py-2 text-left text-[#8b949e]">옵션</th>
+                    <th className="px-4 py-2 text-left text-[#8b949e]">수량</th>
+                    <th className="px-4 py-2 text-right text-[#8b949e]">합계</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {individualOrders.map((order, idx) => (
+                    <tr
+                      key={order.saved_time}
+                      className={`border-t border-[#21262d] hover:bg-[#21262d] ${
+                        selectedOrderIds.has(order.saved_time) ? "bg-[#238636]/10" : ""
+                      }`}
+                    >
+                      <td className="px-4 py-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedOrderIds.has(order.saved_time)}
+                          onChange={() => handleToggleOrder(order.saved_time)}
+                          className="rounded border-[#30363d] bg-[#0d1117] text-[#238636] focus:ring-[#238636]"
+                        />
+                      </td>
+                      <td className="px-4 py-3 text-[#f0f6fc]">{order.recipient_name}</td>
+                      <td className="px-4 py-3 text-[#8b949e]">{order.recipient_phone}</td>
+                      <td className="px-4 py-3 text-[#8b949e]">{order.product_name}</td>
+                      <td className="px-4 py-3 text-[#8b949e]">{order.option}</td>
+                      <td className="px-4 py-3 text-[#8b949e]">{order.quantity}</td>
+                      <td className="px-4 py-3 text-right text-[#f0f6fc]">
+                        ₩{((order.supply_price * order.quantity) + order.shipping_fee).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-6 rounded-lg border border-[#30363d] bg-[#161b22] p-8 text-center">
+            <p className="text-[#8b949e]">📭 발주 대상 주문 없음</p>
+            <p className="text-xs text-[#6e7681] mt-2">선택한 날짜에 미발주 상태인 주문이 없습니다.</p>
+          </div>
+        )}
       </section>
 
       {/* 3단계 진행 표시 */}
@@ -585,11 +734,16 @@ export default function OrderSeparator({
         </h2>
 
         <p className="mb-4 text-sm text-[#8b949e]">
-          원본 발주서 데이터와 <span className="text-[#58a6ff] font-medium">{selectedDate}</span> 날짜의 개별 주문 <span className="text-[#3fb950] font-medium">{individualOrders.length}</span>건을 병합합니다.
+          원본 발주서 데이터와 <span className="text-[#58a6ff] font-medium">{selectedDate}</span> 날짜의 개별 주문을 병합합니다.
+          {selectedOrderIds.size > 0 ? (
+            <span className="text-[#3fb950] font-medium"> 선택된 {selectedOrderIds.size}건</span>
+          ) : (
+            <span className="text-[#3fb950] font-medium"> 전체 {individualOrders.length}건</span>
+          )}
           <br />
           <span className="text-[#f0883e]">* 동일 주소+브랜드 그룹에서 MAX 배송비 1회만 적용됩니다.</span>
           <br />
-          <span className="text-[#6e7681] text-xs">* 개별 주문은 생성 시각 기준 11시 cut-off로 자동 필터링됩니다.</span>
+          <span className="text-[#6e7681] text-xs">* 개별 주문은 생성 시각 기준 11시 cut-off로 자동 필터링되며, 미발주(대기) 상태만 표시됩니다.</span>
         </p>
 
         {sourceData && individualOrders.length > 0 ? (
@@ -597,14 +751,14 @@ export default function OrderSeparator({
             onClick={handleMergeData}
             className="w-full rounded-lg bg-[#58a6ff] px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-[#388bfd]"
           >
-            🔀 데이터 병합 실행 (원본 {sourceData.length - 1}건 + 개별 {individualOrders.length}건)
+            🔀 데이터 병합 실행 (원본 {sourceData.length - 1}건 + 개별 {selectedOrderIds.size > 0 ? selectedOrderIds.size : individualOrders.length}건)
           </button>
         ) : (
           <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-4 text-center text-sm text-[#8b949e]">
             {!sourceData
               ? "Step 1에서 원본 발주서를 먼저 업로드하세요"
               : individualOrders.length === 0
-                ? `${selectedDate} 날짜의 개별 주문이 없습니다`
+                ? `${selectedDate} 날짜의 미발주 주문이 없습니다`
                 : "병합 준비 완료"}
           </div>
         )}
@@ -644,8 +798,17 @@ export default function OrderSeparator({
 
         {processedResults && Object.keys(processedResults).length > 0 && (
           <div className="mt-6 space-y-4">
-            <div className="rounded-lg border border-[#238636] bg-[#238636]/10 p-4">
+            <div className="rounded-lg border border-[#238636] bg-[#238636]/10 p-4 flex items-center justify-between">
               <p className="text-sm text-[#3fb950]">✅ 분리 완료!</p>
+              {selectedOrderIds.size > 0 && (
+                <button
+                  onClick={handleCompleteOrders}
+                  disabled={completingOrders}
+                  className="rounded-lg bg-[#238636] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#2ea043] disabled:opacity-50"
+                >
+                  {completingOrders ? "처리 중..." : "✅ 발주 완료"}
+                </button>
+              )}
             </div>
 
             {/* 공급처별 발주 현황 테이블 */}
