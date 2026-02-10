@@ -130,53 +130,47 @@ function doGet(e) {
     const searchPhone = e.parameter.phone || "";
     const searchMode = searchName || searchPhone; // 검색 모드 여부
     
-    // 데이터 필터링
+    // 데이터 필터링 - M 칼럼만 확인 (시간/날짜 필터 완전 제거)
     const orders = [];
     for (let i = 1; i < data.length; i++) {
       const row = data[i];
-      const savedTimeStr = row[0];
+      
+      // M 칼럼 상태 확인 (인덱스 12)
+      const status = row[12] || "";
+      
+      // 검색 모드 확인
       const rowName = String(row[1] || "").trim();
       const rowPhone = String(row[2] || "").trim();
-      
-      if (!savedTimeStr) continue;
-      
-      let savedTime;
-      if (savedTimeStr instanceof Date) {
-        savedTime = savedTimeStr;
-      } else {
-        savedTime = new Date(savedTimeStr);
-      }
       
       let shouldInclude = false;
       
       if (searchMode) {
-        // 검색 모드: 이름과 전화번호로 필터링 (둘 다 일치해야 함)
+        // 검색 모드: 이름과 전화번호로 필터링 (상태 무관)
         const nameMatch = !searchName || rowName.includes(searchName);
         const phoneMatch = !searchPhone || rowPhone.includes(searchPhone);
         shouldInclude = nameMatch && phoneMatch;
       } else {
-        // 기본 모드: M 칼럼 기반 필터링만 적용 (시간 기준 없음)
-        // 상태 필드 확인 (M 컬럼, 인덱스 12)
-        const status = row[12] || "";
-        
-        // '발주완료'가 아닌 항목만 포함 (비어있는 항목 포함)
-        if (status === "발주완료") {
-          continue;
+        // 기본 모드: M 칼럼이 '발주완료'가 아닌 항목만 (비어있거나 다른 값 모두 포함)
+        // 시간/날짜 필터 완전 제거 - M 칼럼만 확인
+        if (status !== "발주완료") {
+          shouldInclude = true;
         }
-        
-        shouldInclude = true;
       }
       
       if (shouldInclude) {
-        // 검색 모드일 때는 상태 필터링 없이 모든 주문 반환
-        if (searchMode) {
-          // 검색 모드에서는 상태 필터링 없음
-        } else {
-          // 기본 모드에서는 이미 위에서 필터링됨
+        // saved_time 포맷팅 (Date 변환 없이 문자열 그대로 사용)
+        let savedTimeStr = "";
+        const savedTimeRaw = row[0];
+        if (savedTimeRaw) {
+          if (savedTimeRaw instanceof Date) {
+            savedTimeStr = Utilities.formatDate(savedTimeRaw, "Asia/Seoul", "yyyy-MM-dd HH:mm:ss");
+          } else {
+            savedTimeStr = String(savedTimeRaw);
+          }
         }
         
         orders.push({
-          saved_time: Utilities.formatDate(savedTime, "Asia/Seoul", "yyyy-MM-dd HH:mm:ss"),
+          saved_time: savedTimeStr,
           recipient_name: row[1] || "",
           recipient_phone: row[2] || "",
           address: row[3] || "",

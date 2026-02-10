@@ -63,15 +63,12 @@ export default function OrderSeparator({
     try {
       const result = await fetchSavedOrders();
       if (result.success && result.orders) {
-        // M 칼럼 상태 필터링: '발주완료'가 아닌 항목만 (비어있는 항목 포함)
+        // M 칼럼 상태 필터링만 적용: '발주완료'가 아닌 항목만 (비어있는 항목 포함)
+        // 시간/날짜 필터 완전 제거 - saved_time 체크도 제거
         const filtered = result.orders.filter(order => {
-          if (!order.saved_time) return false;
-          
-          // 상태가 '발주완료'가 아닌 항목만 (비어있거나 다른 값)
+          // 상태가 '발주완료'가 아닌 항목만 (비어있거나 다른 값 모두 포함)
           const status = order.status || "";
-          const isNotCompleted = status !== "발주완료";
-          
-          return isNotCompleted;
+          return status !== "발주완료";
         });
         setIndividualOrders(filtered);
         // 선택 상태 초기화
@@ -526,14 +523,17 @@ export default function OrderSeparator({
           </button>
         </div>
 
-        {/* 대기 건수 노출 */}
+        {/* 대기 건수 노출 - 리스트 개수 명시 */}
         {individualOrders.length > 0 ? (
           <div className="mb-4 rounded-lg bg-[#21262d] p-4">
             <p className="text-base font-semibold text-[#f0f6fc]">
               현재 발주 대기 중인 주문은 총 <span className="text-[#3fb950] text-xl font-bold">{individualOrders.length}</span>건입니다
             </p>
             <p className="text-xs text-[#8b949e] mt-2">
-              💡 M 칼럼이 비어있거나 '발주완료'가 아닌 주문만 표시됩니다.
+              💡 M 칼럼이 비어있거나 '발주완료'가 아닌 주문만 표시됩니다. (시간/날짜 필터 없음)
+            </p>
+            <p className="text-xs text-[#58a6ff] mt-1 font-mono">
+              📊 리스트 개수: {individualOrders.length}개
             </p>
           </div>
         ) : (
@@ -543,6 +543,9 @@ export default function OrderSeparator({
             </p>
             <p className="text-xs text-[#6e7681] mt-2">
               💡 모든 주문이 발주 완료되었거나, 미발주 주문 조회 버튼을 눌러주세요.
+            </p>
+            <p className="text-xs text-[#58a6ff] mt-1 font-mono">
+              📊 리스트 개수: 0개
             </p>
           </div>
         )}
