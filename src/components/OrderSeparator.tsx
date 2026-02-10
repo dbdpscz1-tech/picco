@@ -57,17 +57,20 @@ export default function OrderSeparator({
     setPreviewOrders([]);
   };
 
-  // 📋 미발주 주문 데이터 조회 (M 칼럼이 비어있거나 '발주완료'가 아닌 항목만)
+  // 📋 미발주 주문 데이터 조회 (상태 중심 - M 칼럼만 확인)
+  // 데이터 소스: [피코 개별주문] 시트 고정
+  // 필터 조건: M칼럼이 "발주완료"가 아닌 모든 행 (시간/날짜 완전 무관)
   const fetchPendingOrders = async () => {
     setLoadingOrders(true);
     try {
+      // [피코 개별주문] 시트에서 전체 데이터 조회
       const result = await fetchSavedOrders();
       if (result.success && result.orders) {
-        // M 칼럼 상태 필터링만 적용: '발주완료'가 아닌 항목만 (비어있는 항목 포함)
-        // 시간/날짜 필터 완전 제거 - saved_time 체크도 제거
+        // 상태 중심 필터링: M 칼럼이 "발주완료"가 아닌 모든 항목
+        // 시간/날짜 필터 완전 제거 - 1년 전 것이든 오늘 것이든 모두 포함
         const filtered = result.orders.filter(order => {
-          // 상태가 '발주완료'가 아닌 항목만 (비어있거나 다른 값 모두 포함)
-          const status = order.status || "";
+          const status = String(order.status || "").trim();
+          // 유일한 필터 조건: "발주완료"가 아닌 모든 항목
           return status !== "발주완료";
         });
         setIndividualOrders(filtered);
@@ -166,30 +169,32 @@ export default function OrderSeparator({
     }
   };
 
-  // 발주 완료 처리
+  // 발주 완료 처리 (상태 중심)
+  // 선택한 주문들의 M칼럼에 "발주완료" 기입 후 즉시 리스트에서 제거
   const handleCompleteOrders = async () => {
     if (selectedOrderIds.size === 0) {
       alert("발주 완료할 주문을 선택해주세요");
       return;
     }
 
-    if (!confirm(`선택한 ${selectedOrderIds.size}건의 주문을 발주 완료 처리하시겠습니까?`)) {
+    if (!confirm(`선택한 ${selectedOrderIds.size}건의 주문을 발주 완료 처리하시겠습니까?\n\nM칼럼에 "발주완료"가 기입되고 리스트에서 즉시 제거됩니다.`)) {
       return;
     }
 
     setCompletingOrders(true);
     try {
       const orderIds = Array.from(selectedOrderIds);
+      // M칼럼에 "발주완료" 정확히 기입
       const result = await updateOrderStatus(orderIds, "발주완료");
       
       if (result.success) {
-        // 즉시 화면에서 제거 (필터링)
+        // 즉시 리스트에서 제거 (State 업데이트)
         setIndividualOrders(prevOrders => 
           prevOrders.filter(order => !selectedOrderIds.has(order.saved_time))
         );
         // 선택 상태 초기화
         setSelectedOrderIds(new Set());
-        alert(`✅ ${result.count || orderIds.length}건의 주문이 발주 완료 처리되었습니다.`);
+        alert(`✅ ${result.count || orderIds.length}건의 주문이 발주 완료 처리되었습니다.\n\nM칼럼에 "발주완료"가 기입되었고 리스트에서 제거되었습니다.`);
       } else {
         alert(`발주 완료 처리 실패: ${result.error}`);
       }
@@ -201,8 +206,7 @@ export default function OrderSeparator({
   };
 
   // 🔀 Step 2: 데이터 병합 (원본 발주서 + 선택된 개별주문)
-  // 개별 주문은 fetchOrdersByDate에서 11시 기준으로 필터링된 주문들입니다.
-  // 각 주문의 생성 시각(createdAt)이 11시 이전이면 당일, 11시 이후면 다음날 발주에 포함됩니다.
+  // 선택된 개별주문만 병합 (상태 중심 - M칼럼 기반)
   const handleMergeData = () => {
     if (!sourceData) {
       alert("먼저 원본 발주서를 업로드하세요");
@@ -523,32 +527,18 @@ export default function OrderSeparator({
           </button>
         </div>
 
-        {/* 대기 건수 노출 - 리스트 개수 명시 */}
-        {individualOrders.length > 0 ? (
-          <div className="mb-4 rounded-lg bg-[#21262d] p-4">
-            <p className="text-base font-semibold text-[#f0f6fc]">
-              현재 발주 대기 중인 주문은 총 <span className="text-[#3fb950] text-xl font-bold">{individualOrders.length}</span>건입니다
-            </p>
-            <p className="text-xs text-[#8b949e] mt-2">
-              💡 M 칼럼이 비어있거나 '발주완료'가 아닌 주문만 표시됩니다. (시간/날짜 필터 없음)
-            </p>
-            <p className="text-xs text-[#58a6ff] mt-1 font-mono">
-              📊 리스트 개수: {individualOrders.length}개
-            </p>
-          </div>
-        ) : (
-          <div className="mb-4 rounded-lg bg-[#21262d] p-4 text-center">
-            <p className="text-base font-semibold text-[#8b949e]">
-              현재 발주 대기 중인 주문 건이 없습니다.
-            </p>
-            <p className="text-xs text-[#6e7681] mt-2">
-              💡 모든 주문이 발주 완료되었거나, 미발주 주문 조회 버튼을 눌러주세요.
-            </p>
-            <p className="text-xs text-[#58a6ff] mt-1 font-mono">
-              📊 리스트 개수: 0개
-            </p>
-          </div>
-        )}
+        {/* 결과 확인용 로그 - 검색된 미발주 주문 총 건수 */}
+        <div className="mb-4 rounded-lg bg-[#21262d] p-4">
+          <p className="text-base font-semibold text-[#f0f6fc]">
+            검색된 미발주 주문: 총 <span className="text-[#3fb950] text-xl font-bold">{individualOrders.length}</span>건
+          </p>
+          <p className="text-xs text-[#8b949e] mt-2">
+            💡 데이터 소스: [피코 개별주문] 시트 | 필터 조건: M칼럼이 "발주완료"가 아닌 모든 행
+          </p>
+          <p className="text-xs text-[#58a6ff] mt-1 font-mono">
+            📊 리스트 개수: {individualOrders.length}개 (시간/날짜 필터 없음)
+          </p>
+        </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div className="rounded-lg bg-[#238636]/10 border border-[#238636]/30 p-4 text-center">

@@ -101,13 +101,16 @@ function doPost(e) {
   }
 }
 
-// GET 요청 처리 (주문 조회 - 검색 지원)
+// GET 요청 처리 (주문 조회 - 상태 중심 필터링)
+// 데이터 소스: [피코 개별주문] 시트 고정
+// 필터 조건: M칼럼이 "발주완료"가 아닌 모든 행 (시간/날짜 무관)
 function doGet(e) {
   try {
     const headers = {
       "Access-Control-Allow-Origin": "*",
     };
 
+    // [피코 개별주문] 시트에서 데이터 가져오기
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     let sheet = ss.getSheetByName(SHEET_NAME);
     
@@ -118,6 +121,7 @@ function doGet(e) {
       }, headers);
     }
 
+    // 전체 데이터 범위 가져오기 (시간/날짜 필터 없음)
     const data = sheet.getDataRange().getValues();
     
     // 첫 번째 행은 헤더
@@ -125,40 +129,37 @@ function doGet(e) {
       return createJsonResponse({ success: true, orders: [], count: 0 }, headers);
     }
 
-    // 검색 파라미터 확인
+    // 검색 파라미터 확인 (검색 모드)
     const searchName = e.parameter.name || "";
     const searchPhone = e.parameter.phone || "";
-    const searchMode = searchName || searchPhone; // 검색 모드 여부
+    const searchMode = searchName || searchPhone;
     
-    // 데이터 필터링 - M 칼럼만 확인 (시간/날짜 필터 완전 제거)
+    // 상태 중심 필터링: M 칼럼만 확인 (시간/날짜 완전 제거)
     const orders = [];
     for (let i = 1; i < data.length; i++) {
       const row = data[i];
       
-      // M 칼럼 상태 확인 (인덱스 12)
-      const status = row[12] || "";
-      
-      // 검색 모드 확인
-      const rowName = String(row[1] || "").trim();
-      const rowPhone = String(row[2] || "").trim();
+      // M 칼럼 상태 확인 (인덱스 12) - 유일한 필터 조건
+      const status = String(row[12] || "").trim();
       
       let shouldInclude = false;
       
       if (searchMode) {
-        // 검색 모드: 이름과 전화번호로 필터링 (상태 무관)
+        // 검색 모드: 이름과 전화번호로 필터링 (상태 무관, 모든 주문 검색)
+        const rowName = String(row[1] || "").trim();
+        const rowPhone = String(row[2] || "").trim();
         const nameMatch = !searchName || rowName.includes(searchName);
         const phoneMatch = !searchPhone || rowPhone.includes(searchPhone);
         shouldInclude = nameMatch && phoneMatch;
       } else {
-        // 기본 모드: M 칼럼이 '발주완료'가 아닌 항목만 (비어있거나 다른 값 모두 포함)
-        // 시간/날짜 필터 완전 제거 - M 칼럼만 확인
-        if (status !== "발주완료") {
-          shouldInclude = true;
-        }
+        // 기본 모드: M 칼럼이 "발주완료"가 아닌 모든 행 포함
+        // 비어있거나, 다른 값이든 상관없이 "발주완료"만 아니면 포함
+        // 시간/날짜와 완전히 무관 - 1년 전 것이든 오늘 것이든 모두 포함
+        shouldInclude = (status !== "발주완료");
       }
       
       if (shouldInclude) {
-        // saved_time 포맷팅 (Date 변환 없이 문자열 그대로 사용)
+        // saved_time 포맷팅 (필터링 목적이 아닌 데이터 표시용)
         let savedTimeStr = "";
         const savedTimeRaw = row[0];
         if (savedTimeRaw) {
