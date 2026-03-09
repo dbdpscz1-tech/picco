@@ -1,0 +1,39 @@
+name: Daily KPI Report
+
+on:
+  schedule:
+    # 영업일(월~금) 오전 11시 KST (UTC 02:00) 실행
+    # 공휴일은 GitHub Actions에서 자동으로 제외되지 않으므로, 스크립트 내에서 처리
+    - cron: '0 2 * * 1-5'
+  workflow_dispatch: # 수동 실행도 가능
+
+jobs:
+  send-kpi-report:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run KPI report script
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          DASHBOARD_URL: ${{ secrets.DASHBOARD_URL }}
+        run: npm run slack-report
+
+      - name: Report success
+        if: success()
+        run: echo "✅ KPI 리포트 전송 완료"
+
+      - name: Report failure
+        if: failure()
+        run: echo "❌ KPI 리포트 전송 실패"

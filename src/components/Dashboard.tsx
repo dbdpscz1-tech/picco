@@ -22,6 +22,8 @@ export default function Dashboard({
 }: DashboardProps) {
   const [loadingMenu, setLoadingMenu] = useState(false);
   const [showMenuList, setShowMenuList] = useState(false);
+  const [sendingSlack, setSendingSlack] = useState(false);
+  const [slackStatus, setSlackStatus] = useState<"idle" | "success" | "error">("idle");
 
   // 메뉴판 브랜드별 카운트
   const menuBrandCounts: Record<string, number> = {};
@@ -55,8 +57,70 @@ export default function Dashboard({
     }
   };
 
+  // 슬랙 알림 테스트 전송
+  const handleSendSlackTest = async () => {
+    setSendingSlack(true);
+    setSlackStatus("idle");
+    try {
+      const response = await fetch("/api/slack-test", {
+        method: "POST",
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setSlackStatus("success");
+        setTimeout(() => setSlackStatus("idle"), 3000);
+      } else {
+        setSlackStatus("error");
+        alert(`슬랙 전송 실패: ${data.error}`);
+        setTimeout(() => setSlackStatus("idle"), 3000);
+      }
+    } catch (error) {
+      console.error("슬랙 전송 실패:", error);
+      setSlackStatus("error");
+      alert("슬랙 전송 중 오류가 발생했습니다.");
+      setTimeout(() => setSlackStatus("idle"), 3000);
+    } finally {
+      setSendingSlack(false);
+    }
+  };
+
   return (
     <div className="space-y-8">
+      {/* 슬랙 리포트 수동 전송 버튼 */}
+      <section className="rounded-xl border-2 border-[#58a6ff] bg-gradient-to-r from-[#0d1117] to-[#161b22] p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-[#58a6ff] flex items-center gap-2 mb-2">
+              📊 성과 리포트 수동 전송
+            </h2>
+            <p className="text-sm text-[#8b949e]">
+              현재 시점 기준 가장 최근의 유효한 영업일 데이터를 슬랙으로 즉시 전송합니다
+            </p>
+          </div>
+          <button
+            onClick={handleSendSlackTest}
+            disabled={sendingSlack}
+            className={`rounded-lg px-6 py-3 text-sm font-medium text-white transition-colors disabled:opacity-50 ${
+              slackStatus === "success"
+                ? "bg-[#238636] hover:bg-[#2ea043]"
+                : slackStatus === "error"
+                  ? "bg-[#da3633] hover:bg-[#f85149]"
+                  : "bg-[#58a6ff] hover:bg-[#388bfd]"
+            }`}
+          >
+            {sendingSlack
+              ? "전송 중..."
+              : slackStatus === "success"
+                ? "✅ 전송 완료"
+                : slackStatus === "error"
+                  ? "❌ 전송 실패"
+                  : "📤 슬랙 리포트 수동 전송"}
+          </button>
+        </div>
+      </section>
+
       {/* 주문 KPI 대시보드 (메인) */}
       <section>
         <OrderKPIDashboard />
