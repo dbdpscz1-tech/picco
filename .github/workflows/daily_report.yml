@@ -2,9 +2,10 @@ name: Daily KPI Report
 
 on:
   schedule:
-    # 영업일(월~금) 오전 11시 KST (UTC 02:00) 실행
+    # 영업일(월~금) 오전 11시 KST 정각 실행을 위해 10:55 KST (UTC 01:55)에 시작
+    # GitHub Actions의 실행 지연을 고려하여 5분 여유를 두고, 스크립트 내에서 11시까지 대기
     # 공휴일은 GitHub Actions에서 자동으로 제외되지 않으므로, 스크립트 내에서 처리
-    - cron: '0 2 * * 1-5'
+    - cron: '55 1 * * 1-5'
   workflow_dispatch: # 수동 실행도 가능
 
 jobs:
