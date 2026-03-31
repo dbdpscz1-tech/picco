@@ -1721,11 +1721,21 @@ async function saveNewCamp(e){
 
 // ==================== CREATE TASK FROM MATRIX ====================
 async function createAndCycleTask(campId,taskName,title){
+  // 카테고리 자동 매핑
+  const catMap={'계약서':'계약관리','부속합의서1호':'계약관리','공급가확정':'계약관리','부속합의서2호':'계약관리',
+    '캠핏등록':'캠핏세팅','CS챗봇':'캠핏세팅','안심취소':'캠핏세팅','얼리체크인':'캠핏세팅',
+    '기획전':'콘텐츠','사진촬영':'콘텐츠','상세페이지':'콘텐츠','B2B상품':'콘텐츠','체험프로그램':'콘텐츠',
+    '검색광고':'마케팅','네이버연동':'마케팅','슈퍼팬모집':'마케팅','리뷰관리':'마케팅',
+    '캠프닉':'운영','이지캠핑':'운영','월간리포트':'운영',
+    '계약서서명':'계약준비','올인원동의서':'계약준비','사업자정보변경':'계약준비',
+    '플랜전환':'플랫폼세팅','CS챗봇세팅':'플랫폼세팅','안심취소활성화':'플랫폼세팅','상품리뉴얼':'플랫폼세팅',
+    '기획전등록':'마케팅준비','검색광고세팅':'마케팅준비','타사채널해지':'마케팅준비'};
+  const taskType=taskName.startsWith('OP_')?'standard':'prep';
+  const category=catMap[title]||'';
   try{
-    // 먼저 과업 생성 시도 (미시작 상태로)
-    const res=await fetch(`${API}/api/tasks/${encodeURIComponent(campId)}/${encodeURIComponent(taskName)}`,{
-      method:'PUT',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({status:'미시작',title:title})
+    const res=await fetch(`${API}/api/tasks`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({PK:`CAMP#${campId}`,SK:`TASK#${taskName}`,taskName,title,status:'미시작',taskType,category,campCode:campId,pin:'1234'})
     });
     const json=await res.json();
     if(json.success){
