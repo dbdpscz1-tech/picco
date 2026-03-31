@@ -1,0 +1,1812 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PICCO OPS</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+:root{--bg:#0d1117;--card:#161b22;--border:#30363d;--text:#c9d1d9;--muted:#8b949e;--accent:#58a6ff;--green:#3fb950;--red:#f97583;--purple:#d2a8ff;--yellow:#fbbf24}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Malgun Gothic',sans-serif;display:flex;height:100vh;overflow:hidden}
+
+/* Sidebar */
+.sidebar{width:220px;background:#0c0f14;border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.sidebar-logo{padding:16px;font-size:16px;font-weight:800;color:#fff;border-bottom:1px solid var(--border)}
+.sidebar-logo span{color:var(--accent)}
+.nav-item{padding:10px 16px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:8px;color:var(--muted);transition:.15s;border-left:3px solid transparent}
+.nav-item:hover{background:#161b22;color:var(--text)}
+.nav-item.active{background:#1c2333;color:#fff;border-left-color:var(--accent)}
+.nav-item .icon{font-size:16px;width:20px;text-align:center}
+.sidebar-footer{margin-top:auto;padding:12px 16px;font-size:11px;color:#333;border-top:1px solid var(--border)}
+
+/* Main */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.top-bar{padding:10px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.top-bar h2{font-size:16px;font-weight:700;color:#fff}
+.top-bar .meta{font-size:11px;color:var(--muted)}
+.content{flex:1;overflow-y:auto;padding:16px 20px}
+
+/* Pipeline Kanban */
+.kanban{display:flex;gap:10px;overflow-x:auto;height:100%}
+.kanban-col{min-width:200px;flex:1;background:var(--card);border:1px solid var(--border);border-radius:8px;display:flex;flex-direction:column;max-height:calc(100vh - 120px)}
+.kanban-head{padding:10px 12px;font-size:12px;font-weight:700;color:#fff;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;flex-shrink:0}
+.kanban-head .cnt{background:var(--accent);color:#000;border-radius:8px;padding:0 7px;font-size:11px}
+.kanban-body{padding:6px;overflow-y:auto;flex:1}
+.k-card{background:#0d1117;border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:5px;cursor:pointer;transition:.15s;font-size:12px}
+.k-card:hover{border-color:var(--accent)}
+.k-card .name{font-weight:600;color:#fff;margin-bottom:2px}
+.k-card .info{color:var(--muted);font-size:11px}
+.k-card .actions{margin-top:4px;display:flex;gap:4px;flex-wrap:wrap}
+.k-card .actions button{font-size:10px;padding:1px 6px;border-radius:3px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer}
+.k-card .actions button:hover{border-color:var(--accent);color:#fff}
+
+/* Operations Matrix */
+.matrix-wrap{overflow-x:auto}
+.matrix{border-collapse:collapse;font-size:12px;width:100%;min-width:600px}
+.matrix th{background:#21262d;padding:8px 6px;text-align:center;color:var(--muted);font-weight:600;border:1px solid var(--border);position:sticky;top:0;z-index:2;white-space:nowrap}
+.matrix th:first-child{text-align:left;position:sticky;left:0;z-index:3;min-width:130px}
+.matrix td{padding:5px;text-align:center;border:1px solid #1a1f2b}
+.matrix td:first-child{text-align:left;font-weight:600;color:#fff;position:sticky;left:0;background:var(--card);z-index:1;white-space:nowrap}
+.matrix tr:hover td{background:#1c2333}
+.matrix tr:hover td:first-child{background:#1c2333}
+.signal{display:inline-block;width:24px;height:24px;border-radius:5px;font-size:12px;line-height:24px;text-align:center;cursor:pointer;transition:.15s}
+.signal:hover{transform:scale(1.2)}
+.sig-done{background:#064e3b;color:#6ee7b7}
+.sig-wip{background:#1e3a5f;color:#93c5fd}
+.sig-todo{background:#7f1d1d;color:#fca5a5}
+.sig-ext{background:#92400e;color:#fbbf24}
+.sig-hold{background:#3b2f63;color:#c4b5fd}
+.sig-na{background:#161b22;color:#333}
+.matrix-legend{display:flex;gap:12px;margin:10px 0;font-size:11px;color:var(--muted)}
+.matrix-legend span{display:flex;align-items:center;gap:4px}
+.matrix-tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.matrix-tab{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;transition:.2s}
+.matrix-tab:hover,.matrix-tab.active{border-color:var(--accent);color:#fff}
+
+/* Camp Cards */
+.camp-controls{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
+.camp-controls select,.camp-controls input{background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:12px}
+.status-group{margin-bottom:20px}
+.status-group-header{font-size:13px;font-weight:700;padding:8px 12px;border-radius:6px;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.camp-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
+.camp-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;transition:.15s;cursor:pointer}
+.camp-card:hover{border-color:var(--accent);transform:translateY(-1px)}
+.camp-card .c-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+.camp-card .c-name{font-size:14px;font-weight:700;color:#fff}
+.camp-card .c-badge{font-size:10px;padding:2px 8px;border-radius:4px;font-weight:700}
+.camp-card .c-meta{font-size:11px;color:var(--muted);line-height:1.6}
+.camp-card .c-meta b{color:var(--text)}
+.camp-card .c-tasks{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.camp-card .c-tasks span{font-size:10px;padding:2px 6px;border-radius:3px}
+.camp-card .c-notes{font-size:11px;color:#6e7681;margin-top:6px;border-top:1px solid #1a1f2b;padding-top:6px}
+/* Progress bar */
+.progress-bar{height:4px;background:#21262d;border-radius:2px;margin-top:8px;overflow:hidden}
+.progress-fill{height:100%;border-radius:2px}
+/* Stats row */
+.stats-row{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 16px;flex:1;min-width:100px;text-align:center}
+.stat-card .num{font-size:24px;font-weight:800;color:#fff}
+.stat-card .label{font-size:11px;color:var(--muted);margin-top:2px}
+
+/* Camp Detail Panel */
+.detail-panel{position:fixed;right:0;top:0;width:420px;height:100vh;background:var(--card);border-left:1px solid var(--border);z-index:50;overflow-y:auto;padding:20px;display:none;box-shadow:-4px 0 20px rgba(0,0,0,.3)}
+.detail-panel.open{display:block}
+.detail-panel .close-btn{position:absolute;top:12px;right:12px;background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer}
+.detail-panel h3{font-size:18px;font-weight:700;color:#fff;margin-bottom:4px}
+.detail-panel .d-status{font-size:11px;padding:3px 10px;border-radius:4px;font-weight:700;display:inline-block;margin-bottom:12px}
+.detail-section{margin-bottom:16px}
+.detail-section h4{font-size:12px;font-weight:700;color:var(--accent);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px}
+.d-field{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #1a1f2b;font-size:12px}
+.d-field:last-child{border:none}
+.d-field .label{color:var(--muted)}
+.d-field .value{color:#fff;font-weight:600}
+.d-task{display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid #1a1f2b;font-size:12px}
+.d-task:last-child{border:none}
+.d-task .tid{color:var(--accent);font-weight:700;min-width:45px}
+.d-task .ttitle{flex:1;color:var(--text)}
+
+/* Chat */
+.chat-container{display:flex;flex-direction:column;height:calc(100vh - 120px)}
+.chat-messages{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px}
+.chat-msg{max-width:80%;padding:10px 14px;border-radius:10px;font-size:13px;line-height:1.5;white-space:pre-wrap}
+.chat-msg.user{background:var(--accent);color:#000;align-self:flex-end;border-bottom-right-radius:2px}
+.chat-msg.bot{background:var(--card);border:1px solid var(--border);align-self:flex-start;border-bottom-left-radius:2px}
+.chat-input{display:flex;gap:8px;padding:12px;border-top:1px solid var(--border);flex-shrink:0}
+.chat-input input{flex:1;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:13px}
+.chat-input input:focus{outline:none;border-color:var(--accent)}
+.chat-input button{background:var(--accent);color:#000;border:none;border-radius:8px;padding:10px 16px;font-weight:700;cursor:pointer;font-size:13px}
+
+/* Status colors */
+.st-live{background:#064e3b;color:#6ee7b7}.st-contract{background:#1e3a5f;color:#93c5fd}
+.st-meeting{background:#3b2f63;color:#c4b5fd}.st-new{background:#21262d;color:#8b949e}
+.st-hold{background:#7f1d1d;color:#fca5a5}.st-closed{background:#1a1a2e;color:#555}
+.st-mou{background:#92400e;color:#fbbf24}
+
+/* Dashboard KPI */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:24px}
+.kpi-box{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;text-align:center;transition:.15s}
+.kpi-box:hover{border-color:var(--accent);transform:translateY(-2px)}
+.kpi-num{font-size:48px;font-weight:900;line-height:1}
+.kpi-label{font-size:13px;color:var(--muted);margin-top:8px}
+.kpi-sub{font-size:11px;color:var(--muted);margin-top:4px}
+.hold-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:8px}
+.hold-card .h-name{font-size:14px;font-weight:700;color:#fff}
+.hold-card .h-reason{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.6}
+
+/* Calendar */
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.cal-header{padding:8px;text-align:center;font-size:12px;font-weight:700;color:var(--muted)}
+.cal-day{background:var(--card);border:1px solid var(--border);border-radius:6px;min-height:100px;padding:6px;font-size:11px;transition:.15s}
+.cal-day:hover{border-color:var(--accent)}
+.cal-day.today{border-color:var(--accent);background:#1c2333}
+.cal-day.other-month{opacity:.3}
+.cal-day .day-num{font-weight:700;color:var(--text);margin-bottom:4px;font-size:12px}
+.cal-day.today .day-num{color:var(--accent)}
+.cal-event{background:#1e3a5f;border-left:3px solid var(--accent);border-radius:3px;padding:2px 5px;margin-bottom:3px;font-size:10px;color:var(--text);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-event:hover{background:#2a4a6f}
+.cal-event.meeting{border-left-color:var(--purple);background:#2d1f4e}
+.cal-event.meeting-pending{border-left-color:var(--yellow);background:#2a2008;border-style:dashed}
+.cal-event.contract{border-left-color:var(--green);background:#0a3622}
+.cal-event.live{border-left-color:var(--yellow);background:#2a2008}
+.cal-nav{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.cal-nav button{background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 14px;cursor:pointer;font-size:13px}
+.cal-nav button:hover{border-color:var(--accent)}
+.cal-nav .cal-title{font-size:18px;font-weight:700;color:#fff}
+
+/* Activity Log */
+.log-item{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);font-size:12px}
+.log-item:last-child{border:none}
+.log-time{color:var(--muted);min-width:140px;white-space:nowrap;font-size:11px}
+.log-icon{font-size:16px;min-width:24px;text-align:center}
+.log-body{flex:1;color:var(--text);line-height:1.6}
+.log-body b{color:#fff}
+.log-badge{font-size:10px;padding:1px 6px;border-radius:3px;font-weight:600;margin-left:4px}
+
+/* Edit Modal */
+.modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);z-index:100;display:none;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.edit-modal{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px;width:460px;max-width:90vw;max-height:85vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.5)}
+.edit-modal h3{font-size:18px;font-weight:700;color:#fff;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}
+.edit-modal h3 .close-btn{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer}
+.edit-modal .form-group{margin-bottom:14px}
+.edit-modal .form-group label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px}
+.edit-modal .form-group input,.edit-modal .form-group select,.edit-modal .form-group textarea{width:100%;background:#0d1117;color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:13px;font-family:inherit}
+.edit-modal .form-group input:focus,.edit-modal .form-group select:focus,.edit-modal .form-group textarea:focus{outline:none;border-color:var(--accent)}
+.edit-modal .form-group textarea{min-height:80px;resize:vertical}
+.edit-modal .btn-row{display:flex;gap:8px;margin-top:18px}
+.edit-modal .btn-primary{background:var(--accent);color:#000;border:none;border-radius:8px;padding:10px 20px;font-weight:700;cursor:pointer;font-size:13px;flex:1}
+.edit-modal .btn-primary:hover{opacity:.9}
+.edit-modal .btn-secondary{background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px 20px;cursor:pointer;font-size:13px}
+.edit-modal .btn-secondary:hover{border-color:var(--accent)}
+.edit-btn{font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid var(--border);background:var(--card);color:var(--accent);cursor:pointer;font-weight:600}
+.edit-btn:hover{border-color:var(--accent);background:#1c2333}
+
+/* Matrix memo */
+.mx-memo-cell{position:relative;min-width:120px;max-width:200px}
+.mx-memo-text{font-size:10px;color:var(--muted);max-height:40px;overflow:hidden;text-overflow:ellipsis;white-space:pre-wrap;cursor:pointer;padding:2px 4px;border-radius:4px;transition:.15s}
+.mx-memo-text:hover{background:#1c2333;color:var(--text)}
+.mx-memo-text.empty{color:#333;font-style:italic}
+.mx-memo-edit{position:absolute;top:0;left:0;z-index:10;background:var(--card);border:1px solid var(--accent);border-radius:6px;padding:8px;width:250px;box-shadow:0 4px 16px rgba(0,0,0,.4)}
+.mx-memo-edit textarea{width:100%;background:#0d1117;color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px;font-size:11px;font-family:inherit;min-height:60px;resize:vertical}
+.mx-memo-edit textarea:focus{outline:none;border-color:var(--accent)}
+.mx-memo-edit .mx-memo-btns{display:flex;gap:4px;margin-top:4px;justify-content:flex-end}
+.mx-memo-edit .mx-memo-btns button{font-size:10px;padding:3px 8px;border-radius:4px;cursor:pointer;border:1px solid var(--border)}
+
+/* Toast */
+.toast{position:fixed;bottom:20px;right:20px;background:var(--green);color:#000;padding:10px 16px;border-radius:8px;font-size:13px;font-weight:600;display:none;z-index:200}
+
+@media(max-width:768px){
+.sidebar{width:56px}.sidebar .nav-text,.sidebar-logo span,.sidebar-footer{display:none}
+.sidebar-logo{padding:12px;font-size:14px}
+.camp-cards{grid-template-columns:1fr}
+.detail-panel{width:100%}
+}
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <div class="sidebar-logo">PICCO <span>OPS</span></div>
+  <div class="nav-item active" onclick="navigate('dashboard')"><span class="icon">📈</span><span class="nav-text">대시보드</span></div>
+  <div class="nav-item" onclick="navigate('pipeline')"><span class="icon">📊</span><span class="nav-text">파이프라인</span></div>
+  <div class="nav-item" onclick="navigate('calendar')"><span class="icon">📅</span><span class="nav-text">미팅 캘린더</span></div>
+  <div class="nav-item" onclick="navigate('matrix')"><span class="icon">🚦</span><span class="nav-text">운영 현황판</span></div>
+  <div class="nav-item" onclick="navigate('camps')"><span class="icon">🏕️</span><span class="nav-text">캠핑장 현황</span></div>
+  <div class="nav-item" onclick="navigate('logs')"><span class="icon">📋</span><span class="nav-text">활동 로그</span></div>
+  <div class="nav-item" onclick="navigate('chat')"><span class="icon">💬</span><span class="nav-text">챗봇</span></div>
+  <div class="sidebar-footer">v18b | API 연동</div>
+</div>
+
+<div class="main">
+  <div class="top-bar">
+    <h2 id="pageTitle">파이프라인 보드</h2>
+    <div>
+      <span class="meta" id="lastUpdate"></span>
+      <button onclick="loadAll()" style="background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;margin-left:8px">새로고침</button>
+    </div>
+  </div>
+  <div class="content" id="content"></div>
+</div>
+
+<!-- Detail Side Panel -->
+<div class="detail-panel" id="detailPanel">
+  <button class="close-btn" onclick="closeDetail()">&times;</button>
+  <div id="detailContent"></div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal-overlay" id="editModal" onclick="if(event.target===this)closeEditModal()">
+  <div class="edit-modal">
+    <h3><span id="editModalTitle">캠핑장 수정</span><button class="close-btn" onclick="closeEditModal()">&times;</button></h3>
+    <div id="editTabs" style="display:flex;gap:6px;margin-bottom:16px">
+      <button class="btn-secondary" style="flex:1;font-size:12px;padding:8px" onclick="switchEditTab('info')" id="tab-info">기본 정보</button>
+      <button class="btn-secondary" style="flex:1;font-size:12px;padding:8px" onclick="switchEditTab('meeting')" id="tab-meeting">미팅 일정</button>
+      <button class="btn-secondary" style="flex:1;font-size:12px;padding:8px" onclick="switchEditTab('memo')" id="tab-memo">메모</button>
+    </div>
+    <form id="editForm" onsubmit="saveEdit(event)">
+      <input type="hidden" id="edit-pk">
+      <!-- 기본 정보 탭 -->
+      <div id="editTabInfo">
+        <div class="form-group">
+          <label>캠핑장명</label>
+          <input type="text" id="edit-campName" placeholder="캠핑장 이름">
+        </div>
+        <div class="form-group">
+          <label>상태</label>
+          <select id="edit-status" onchange="toggleHoldReason()">
+            <option value="신규 접수">신규 접수</option>
+            <option value="미팅 조율">미팅 조율</option>
+            <option value="미팅 확정">미팅 확정</option>
+            <option value="계약 협의">계약 협의</option>
+            <option value="계약 확정">계약 확정</option>
+            <option value="앱 라이브">앱 라이브</option>
+            <option value="MOU 체결">MOU 체결</option>
+            <option value="재접촉 필요">재접촉 필요</option>
+            <option value="보류">보류</option>
+            <option value="종결">종결</option>
+          </select>
+        </div>
+        <div class="form-group" id="holdReasonGroup" style="display:none">
+          <label>보류/종결 사유</label>
+          <select id="edit-holdReasonPreset" onchange="if(this.value)document.getElementById('edit-holdReason').value=this.value" style="margin-bottom:6px">
+            <option value="">직접 입력</option>
+            <option value="연락두절">연락두절</option>
+            <option value="대표 거절">대표 거절</option>
+            <option value="조건 불일치">조건 불일치</option>
+            <option value="타 플랫폼 이용">타 플랫폼 이용</option>
+            <option value="시설 미달">시설 미달</option>
+            <option value="시기 조절">시기 조절</option>
+            <option value="폐업/휴업">폐업/휴업</option>
+          </select>
+          <input type="text" id="edit-holdReason" placeholder="간단한 사유 (예: 연락두절, 조건 불일치)">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="form-group">
+            <label>담당자 (MD)</label>
+            <input type="text" id="edit-md" placeholder="담당자 이름">
+          </div>
+          <div class="form-group">
+            <label>휴대폰번호</label>
+            <input type="tel" id="edit-phone" placeholder="010-0000-0000">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="form-group">
+            <label>지역</label>
+            <input type="text" id="edit-region" placeholder="예: 경기 가평">
+          </div>
+          <div class="form-group">
+            <label>사이트 수</label>
+            <input type="number" id="edit-siteCount" placeholder="0" min="0">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="form-group">
+            <label>계약일</label>
+            <input type="date" id="edit-contractDate">
+          </div>
+          <div class="form-group">
+            <label>플랜 적용일자</label>
+            <input type="date" id="edit-planStartDate">
+          </div>
+        </div>
+      </div>
+      <!-- 미팅 일정 탭 -->
+      <div id="editTabMeeting" style="display:none">
+        <div style="background:#1e3a5f22;border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:14px">
+          <div style="font-size:12px;font-weight:700;color:var(--purple);margin-bottom:8px">📅 미팅 일정 등록</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div class="form-group" style="margin:0">
+              <label>미팅 날짜</label>
+              <input type="date" id="edit-nextMeeting">
+            </div>
+            <div class="form-group" style="margin:0">
+              <label>미팅 시간</label>
+              <input type="time" id="edit-meetingTime" value="14:00">
+            </div>
+          </div>
+          <div class="form-group" style="margin-top:10px;margin-bottom:0">
+            <label>방문자 / 참석자</label>
+            <input type="text" id="edit-meetingVisitor" placeholder="예: 김태환, 박민수">
+          </div>
+          <div class="form-group" style="margin-top:10px;margin-bottom:0">
+            <label>미팅 장소 / 목적</label>
+            <input type="text" id="edit-meetingPurpose" placeholder="예: 현장 방문, 계약 논의">
+          </div>
+        </div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.8">
+          저장하면 캘린더에 자동으로 반영됩니다.
+        </div>
+      </div>
+      <!-- 메모 탭 -->
+      <div id="editTabMemo" style="display:none">
+        <div class="form-group">
+          <label style="color:var(--green)">25년도 매출</label>
+          <textarea id="edit-revenue" placeholder="월별 매출, 누적 매출 등" style="min-height:60px"></textarea>
+        </div>
+        <div class="form-group">
+          <label style="color:var(--purple)">상담 내용</label>
+          <textarea id="edit-consultation" placeholder="상담 이력, 요청 사항, 협의 내용 등" style="min-height:80px"></textarea>
+        </div>
+        <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
+        <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px">메모 기록</div>
+        <div id="memoHistory" style="margin-bottom:12px;max-height:200px;overflow-y:auto"></div>
+        <div style="background:#0d1117;border:1px solid var(--border);border-radius:8px;padding:14px">
+          <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:8px">새 메모 추가</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div class="form-group" style="margin-bottom:0">
+              <label>작성자</label>
+              <input type="text" id="edit-memoAuthor" placeholder="이름">
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label>구분</label>
+              <select id="edit-memoType">
+                <option value="">일반</option>
+                <option value="미팅">미팅 결과</option>
+                <option value="전화">전화 상담</option>
+                <option value="방문">현장 방문</option>
+                <option value="이슈">이슈/특이사항</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group" style="margin-top:8px;margin-bottom:0">
+            <label>내용</label>
+            <textarea id="edit-memoNew" placeholder="내용을 입력하세요" style="min-height:70px"></textarea>
+          </div>
+        </div>
+        <input type="hidden" id="edit-notes">
+      </div>
+      <div class="btn-row">
+        <button type="button" class="btn-secondary" onclick="closeEditModal()">취소</button>
+        <button type="button" style="background:#7f1d1d;color:#fca5a5;border:none;border-radius:8px;padding:10px 16px;cursor:pointer;font-size:12px" onclick="deleteCamp()">🗑 삭제</button>
+        <button type="submit" class="btn-primary">💾 저장</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Create Modal -->
+<div class="modal-overlay" id="createModal" onclick="if(event.target===this)closeCreateModal()">
+  <div class="edit-modal">
+    <h3><span>새 캠핑장 등록</span><button class="close-btn" onclick="closeCreateModal()">&times;</button></h3>
+    <form id="createForm" onsubmit="saveNewCamp(event)">
+      <div class="form-group">
+        <label>캠핑장명 *</label>
+        <input type="text" id="create-name" placeholder="캠핑장 이름" required>
+      </div>
+      <div class="form-group">
+        <label>상태</label>
+        <select id="create-status">
+          <option value="신규 접수" selected>신규 접수</option>
+          <option value="미팅 조율">미팅 조율</option>
+          <option value="미팅 확정">미팅 확정</option>
+          <option value="계약 협의">계약 협의</option>
+          <option value="계약 확정">계약 확정</option>
+          <option value="앱 라이브">앱 라이브</option>
+          <option value="MOU 체결">MOU 체결</option>
+        </select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group">
+          <label>담당자 (MD)</label>
+          <input type="text" id="create-md" placeholder="담당자 이름">
+        </div>
+        <div class="form-group">
+          <label>지역</label>
+          <input type="text" id="create-region" placeholder="예: 경기 가평">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group">
+          <label>사이트 수</label>
+          <input type="number" id="create-siteCount" placeholder="0" min="0">
+        </div>
+        <div class="form-group">
+          <label>다음 미팅일</label>
+          <input type="date" id="create-nextMeeting">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>메모</label>
+        <textarea id="create-notes" placeholder="특이사항, 연락처 등"></textarea>
+      </div>
+      <div class="btn-row">
+        <button type="button" class="btn-secondary" onclick="closeCreateModal()">취소</button>
+        <button type="submit" class="btn-primary">+ 등록</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API='http://3.34.222.39';
+let camps=[],deletedCamps=[],tasks=[],currentView='dashboard',matrixScope='live',calYear=new Date().getFullYear(),calMonth=new Date().getMonth();
+
+// Activity Log (localStorage 저장)
+function getActivityLogs(){try{return JSON.parse(localStorage.getItem('picco_logs')||'[]')}catch(e){return[]}}
+function addLog(type,camp,detail){
+  const logs=getActivityLogs();
+  logs.unshift({time:new Date().toISOString(),type,camp,detail});
+  if(logs.length>500)logs.length=500;
+  localStorage.setItem('picco_logs',JSON.stringify(logs));
+}
+
+const STAGES=['신규 접수','미팅 조율','미팅 확정','계약 협의','계약 확정','앱 라이브','MOU 체결'];
+const STATUS_CLS={'앱 라이브':'st-live','계약 확정':'st-contract','계약 완료':'st-contract','계약 협의':'st-contract','미팅 확정':'st-meeting','미팅 조율':'st-meeting','신규 접수':'st-new','보류':'st-hold','종결':'st-closed','MOU 체결':'st-mou'};
+const STATUS_ORDER=['앱 라이브','계약 확정','계약 협의','미팅 확정','미팅 조율','신규 접수','재접촉 필요','MOU 체결','보류','종결'];
+const STATUS_EMOJI={'앱 라이브':'🟢','계약 확정':'🔵','계약 완료':'🔵','계약 협의':'🟣','미팅 확정':'🟡','미팅 조율':'🟠','신규 접수':'⚪','재접촉 필요':'🟠','보류':'🔴','종결':'⚫','MOU 체결':'🏗️'};
+const TASK_STATUSES=['완료','진행중','외부대기','미시작','보류'];
+
+// Signal auto-derive from status (DB signal 무시 — 항상 상태 기반)
+function campSignal(c){return STATUS_EMOJI[c.status]||'⚪'}
+const SIG_MAP={
+  '완료':{cls:'sig-done',icon:'✅'},'진행중':{cls:'sig-wip',icon:'🔄'},
+  '외부대기':{cls:'sig-ext',icon:'⏳'},'미시작':{cls:'sig-todo',icon:'⬜'},
+  '보류':{cls:'sig-hold',icon:'⏸'}
+};
+
+// === 표준 운영 과업 (시간순, 카테고리별 그룹) ===
+const OP_GROUPS=[
+  {cat:'계약관리',color:'#58a6ff',tasks:['계약서','부속합의서1호','공급가확정','부속합의서2호']},
+  {cat:'캠핏세팅',color:'#3fb950',tasks:['캠핏등록','CS챗봇','안심취소','얼리체크인']},
+  {cat:'콘텐츠',color:'#d2a8ff',tasks:['기획전','사진촬영','상세페이지','B2B상품','체험프로그램']},
+  {cat:'마케팅',color:'#fbbf24',tasks:['검색광고','네이버연동','슈퍼팬모집','리뷰관리']},
+  {cat:'운영',color:'#f97583',tasks:['캠프닉','이지캠핑','월간리포트']},
+];
+
+async function loadAll(){
+  try{
+    const [c,t]=await Promise.all([
+      fetch(`${API}/api/camps`).then(r=>r.json()),
+      fetch(`${API}/api/tasks`).then(r=>r.json())
+    ]);
+    const allCamps=c.data.map(x=>{if(!x.name)x.name=x.PK?.replace('CAMP#','')||'';return x}).sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+    camps=allCamps.filter(x=>x.status!=='삭제됨');
+    deletedCamps=allCamps.filter(x=>x.status==='삭제됨');
+    tasks=t.data;
+    document.getElementById('lastUpdate').textContent=new Date().toLocaleTimeString('ko-KR');
+    render();
+  }catch(e){showToast('API 연결 실패: '+e.message,'var(--red)')}
+}
+
+function navigate(view){
+  currentView=view;
+  document.querySelectorAll('.nav-item').forEach(el=>el.classList.remove('active'));
+  const idx=['dashboard','pipeline','calendar','matrix','camps','logs','chat'].indexOf(view);
+  document.querySelectorAll('.nav-item')[idx].classList.add('active');
+  const titles={dashboard:'대시보드',pipeline:'파이프라인 보드',calendar:'미팅 캘린더',matrix:'운영 현황판',camps:'캠핑장 현황',logs:'활동 로그',chat:'AI 챗봇'};
+  document.getElementById('pageTitle').textContent=titles[view];
+  closeDetail();
+  render();
+}
+
+function render(){
+  const el=document.getElementById('content');
+  if(currentView==='dashboard')renderDashboard(el);
+  else if(currentView==='pipeline')renderPipeline(el);
+  else if(currentView==='calendar')renderCalendar(el);
+  else if(currentView==='matrix')renderMatrix(el);
+  else if(currentView==='camps')renderCamps(el);
+  else if(currentView==='logs')renderLogs(el);
+  else if(currentView==='chat')renderChat(el);
+}
+
+// ==================== DASHBOARD ====================
+function renderDashboard(el){
+  const now=new Date();
+  const todayStr=now.toISOString().slice(0,10);
+
+  // 카운트
+  const liveCamps=camps.filter(c=>c.status==='앱 라이브');
+  const contractCamps=camps.filter(c=>['계약 협의','계약 확정','계약 완료'].includes(c.status));
+  const meetingCamps=camps.filter(c=>['미팅 확정','미팅 조율'].includes(c.status));
+  const newCamps=camps.filter(c=>c.status==='신규 접수');
+  const mouCamps=camps.filter(c=>c.status==='MOU 체결');
+  const holdCamps=camps.filter(c=>c.status==='보류');
+  const closedCamps=camps.filter(c=>c.status==='종결');
+  const recontactCamps=camps.filter(c=>c.status==='재접촉 필요');
+
+  // 이번 주 미팅
+  const weekStart=new Date(now);weekStart.setDate(now.getDate()-now.getDay());
+  const weekEnd=new Date(weekStart);weekEnd.setDate(weekStart.getDate()+6);
+  const weekMeetings=camps.filter(c=>{
+    if(!c.nextMeeting)return false;
+    const d=new Date(c.nextMeeting);
+    return d>=weekStart&&d<=weekEnd;
+  });
+
+  // 과업 진행률
+  const totalTasks=tasks.length;
+  const doneTasks=tasks.filter(t=>t.status==='완료').length;
+  const wipTasks=tasks.filter(t=>t.status==='진행중').length;
+  const taskRate=totalTasks?Math.round(doneTasks/totalTasks*100):0;
+
+  let html=`
+  <div style="margin-bottom:20px">
+    <div style="font-size:11px;color:var(--muted);margin-bottom:4px">${now.toLocaleDateString('ko-KR',{year:'numeric',month:'long',day:'numeric',weekday:'long'})}</div>
+    <div style="font-size:20px;font-weight:800;color:#fff">PICCO 일일 운영 현황</div>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi-box" style="border-left:4px solid var(--green)">
+      <div class="kpi-num" style="color:var(--green)">${liveCamps.length}</div>
+      <div class="kpi-label">운영 중 (앱 라이브)</div>
+      <div class="kpi-sub">${liveCamps.map(c=>c.name).slice(0,5).join(', ')}${liveCamps.length>5?' 외 '+(liveCamps.length-5)+'개':''}</div>
+    </div>
+    <div class="kpi-box" style="border-left:4px solid var(--accent)">
+      <div class="kpi-num" style="color:var(--accent)">${contractCamps.length}</div>
+      <div class="kpi-label">계약 진행 중</div>
+      <div class="kpi-sub">협의 ${camps.filter(c=>c.status==='계약 협의').length} · 확정 ${camps.filter(c=>c.status==='계약 확정').length}</div>
+    </div>
+    <div class="kpi-box" style="border-left:4px solid var(--purple)">
+      <div class="kpi-num" style="color:var(--purple)">${meetingCamps.length}</div>
+      <div class="kpi-label">미팅 예정</div>
+      <div class="kpi-sub">확정 ${camps.filter(c=>c.status==='미팅 확정').length} · 조율 ${camps.filter(c=>c.status==='미팅 조율').length}</div>
+    </div>
+    <div class="kpi-box" style="border-left:4px solid var(--muted)">
+      <div class="kpi-num" style="color:#fff">${camps.length}</div>
+      <div class="kpi-label">총 파이프라인</div>
+      <div class="kpi-sub">신규 ${newCamps.length} · MOU ${mouCamps.length} · 재접촉 ${recontactCamps.length}</div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-bottom:24px">
+    <!-- 과업 진행률 -->
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px">
+      <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:12px">과업 진행률</div>
+      <div style="display:flex;align-items:center;gap:16px">
+        <div style="font-size:36px;font-weight:900;color:${taskRate>=70?'var(--green)':taskRate>=40?'var(--yellow)':'var(--red)'}">${taskRate}%</div>
+        <div style="flex:1">
+          <div class="progress-bar" style="height:8px;margin-bottom:8px"><div class="progress-fill" style="width:${taskRate}%;background:${taskRate>=70?'var(--green)':taskRate>=40?'var(--yellow)':'var(--red)'}"></div></div>
+          <div style="font-size:11px;color:var(--muted)">완료 ${doneTasks} / 진행중 ${wipTasks} / 전체 ${totalTasks}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 이번 주 미팅 -->
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px">
+      <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:12px">이번 주 미팅 일정 (${weekMeetings.length}건)</div>
+      ${weekMeetings.length?weekMeetings.map(c=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #1a1f2b;font-size:12px">
+          <div><span style="color:var(--purple);font-weight:700">${c.nextMeeting}</span> &nbsp;${campSignal(c)} <b style="color:#fff">${c.name}</b></div>
+          <div style="color:var(--muted)">${c.md?c.md:''}${c.region?' · '+c.region:''}</div>
+        </div>
+      `).join(''):'<div style="font-size:12px;color:var(--muted)">이번 주 예정된 미팅이 없습니다.</div>'}
+    </div>
+  </div>
+
+  <!-- MD별 담당 현황 -->
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:24px">
+    <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:12px">MD별 담당 현황</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
+    ${(()=>{
+      const mdMap={};
+      camps.forEach(c=>{const m=c.md||'미배정';if(!mdMap[m])mdMap[m]={total:0,live:0,contract:0,meeting:0};mdMap[m].total++;if(c.status==='앱 라이브')mdMap[m].live++;if(['계약 협의','계약 확정'].includes(c.status))mdMap[m].contract++;if(['미팅 확정','미팅 조율'].includes(c.status))mdMap[m].meeting++});
+      return Object.entries(mdMap).sort((a,b)=>b[1].total-a[1].total).map(([md,d])=>`
+        <div style="background:#0d1117;border:1px solid var(--border);border-radius:8px;padding:12px">
+          <div style="font-size:14px;font-weight:700;color:var(--accent);margin-bottom:6px">${md}</div>
+          <div style="font-size:11px;color:var(--muted);line-height:2">
+            전체 <b style="color:#fff">${d.total}</b> · 운영 <b style="color:var(--green)">${d.live}</b> · 계약 <b style="color:var(--accent)">${d.contract}</b> · 미팅 <b style="color:var(--purple)">${d.meeting}</b>
+          </div>
+        </div>
+      `).join('');
+    })()}
+    </div>
+  </div>
+
+  <!-- 보류/종결 사유 -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(400px,1fr));gap:16px;margin-bottom:24px">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px">
+      <div style="font-size:14px;font-weight:700;color:var(--red);margin-bottom:12px">보류 (${holdCamps.length}건)</div>
+      ${holdCamps.length?holdCamps.map(c=>`
+        <div class="hold-card">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div class="h-name">${campSignal(c)} ${c.name}</div>
+            <span style="font-size:10px;color:var(--muted)">${c.md||''} ${c.region?'· '+c.region:''}</span>
+          </div>
+          <div class="h-reason">${c.notes||'사유 미기재 — 메모를 추가해주세요'}</div>
+        </div>
+      `).join(''):'<div style="font-size:12px;color:var(--muted)">보류 건이 없습니다.</div>'}
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px">
+      <div style="font-size:14px;font-weight:700;color:#555;margin-bottom:12px">종결 (${closedCamps.length}건)</div>
+      ${closedCamps.length?closedCamps.map(c=>`
+        <div class="hold-card">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div class="h-name">${campSignal(c)} ${c.name}</div>
+            <span style="font-size:10px;color:var(--muted)">${c.md||''} ${c.region?'· '+c.region:''}</span>
+          </div>
+          <div class="h-reason">${c.notes||'사유 미기재 — 메모를 추가해주세요'}</div>
+        </div>
+      `).join(''):'<div style="font-size:12px;color:var(--muted)">종결 건이 없습니다.</div>'}
+    </div>
+  </div>
+
+  <!-- 슬랙 KPI 복사 -->
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:24px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div style="font-size:14px;font-weight:700;color:#fff">Slack 일일 KPI 보고</div>
+      <button onclick="copySlackKPI()" style="background:var(--accent);color:#000;border:none;border-radius:6px;padding:6px 14px;font-weight:700;cursor:pointer;font-size:12px">복사하기</button>
+    </div>
+    <pre id="slackKPI" style="background:#0d1117;border:1px solid var(--border);border-radius:8px;padding:14px;font-size:12px;color:var(--text);line-height:1.8;white-space:pre-wrap;overflow-x:auto">${generateSlackKPI()}</pre>
+  </div>`;
+
+  el.innerHTML=html;
+}
+
+function generateSlackKPI(){
+  const now=new Date();
+  const dateStr=now.toLocaleDateString('ko-KR',{year:'numeric',month:'long',day:'numeric',weekday:'short'});
+  const todayISO=now.toISOString().slice(0,10);
+  const dayNames=['일','월','화','수','목','금','토'];
+
+  const liveCamps=camps.filter(c=>c.status==='앱 라이브');
+  const contractCamps=camps.filter(c=>['계약 협의','계약 확정','계약 완료'].includes(c.status));
+  const meetingCamps=camps.filter(c=>['미팅 확정','미팅 조율'].includes(c.status));
+  const newCamps=camps.filter(c=>c.status==='신규 접수');
+  const holdCamps=camps.filter(c=>c.status==='보류');
+  const closedCamps=camps.filter(c=>c.status==='종결');
+  const mouCamps=camps.filter(c=>c.status==='MOU 체결');
+  const recontactCamps=camps.filter(c=>c.status==='재접촉 필요');
+
+  const todayNew=camps.filter(c=>c.updatedAt===todayISO&&c.status==='신규 접수');
+  const todayMeetingSet=camps.filter(c=>c.updatedAt===todayISO&&['미팅 확정','미팅 조율'].includes(c.status)&&c.nextMeeting);
+
+  // 2주치 미팅
+  const weekStart=new Date(now);weekStart.setDate(now.getDate()-now.getDay());
+  const twoWeekEnd=new Date(weekStart);twoWeekEnd.setDate(weekStart.getDate()+13);
+  const upcomingMeetings=camps.filter(c=>{if(!c.nextMeeting)return false;const d=new Date(c.nextMeeting);return d>=new Date(todayISO)&&d<=twoWeekEnd}).sort((a,b)=>(a.nextMeeting||'').localeCompare(b.nextMeeting||''));
+  const meetingByDate={};
+  upcomingMeetings.forEach(c=>{const d=c.nextMeeting.slice(0,10);if(!meetingByDate[d])meetingByDate[d]=[];meetingByDate[d].push(c)});
+
+  function groupByReason(list){const g={};list.forEach(c=>{const r=(c.holdReason||c.notes||'사유 미기재').split('\\n')[0].slice(0,30);if(!g[r])g[r]=[];g[r].push(c.name)});return g}
+
+  let kpi=`📊 PICCO 일일 운영 보고\n${dateStr}\n`;
+  kpi+=`\n━━━  파이프라인 (총 ${camps.length}건)  ━━━\n\n`;
+  kpi+=`  🟢 운영 중      ${liveCamps.length}개소\n`;
+  kpi+=`  🔵 계약 진행    ${contractCamps.length}건  (협의 ${camps.filter(c=>c.status==='계약 협의').length} / 확정 ${camps.filter(c=>c.status==='계약 확정').length})\n`;
+  kpi+=`  🟣 미팅 예정    ${meetingCamps.length}건  (확정 ${camps.filter(c=>c.status==='미팅 확정').length} / 조율 ${camps.filter(c=>c.status==='미팅 조율').length})\n`;
+  kpi+=`  ⚪ 신규 접수    ${newCamps.length}건\n`;
+  kpi+=`  🏗️ MOU          ${mouCamps.length}건`;
+  if(recontactCamps.length)kpi+=`\n  🟠 재접촉       ${recontactCamps.length}건`;
+
+  if(todayNew.length||todayMeetingSet.length){
+    kpi+=`\n\n━━━  오늘  ━━━\n`;
+    if(todayNew.length){kpi+=`\n  🆕 신규 접수 ${todayNew.length}건`;todayNew.forEach(c=>{kpi+=`\n     ${c.name}${c.region?' ['+c.region+']':''}`})}
+    if(todayMeetingSet.length){kpi+=`\n  📅 미팅 확정 ${todayMeetingSet.length}건`;todayMeetingSet.forEach(c=>{kpi+=`\n     ${c.name} → ${c.nextMeeting}${c.meetingTime?' '+c.meetingTime:''}`})}
+  }
+
+  if(Object.keys(meetingByDate).length){
+    kpi+=`\n\n━━━  미팅 캘린더  ━━━\n`;
+    Object.entries(meetingByDate).forEach(([date,list])=>{
+      const d=new Date(date);const dayName=dayNames[d.getDay()];const isToday=date===todayISO;
+      kpi+=`\n  📅 ${date} (${dayName})${isToday?' ← 오늘':''}`;
+      list.sort((a,b)=>(a.meetingTime||'99').localeCompare(b.meetingTime||'99'));
+      list.forEach(c=>{
+        kpi+=`\n     ${c.meetingTime||''} ${c.name}`;
+        if(c.md)kpi+=` MD:${c.md}`;
+        if(c.meetingVisitor)kpi+=` 👤${c.meetingVisitor}`;
+        if(c.region)kpi+=` [${c.region}]`;
+      });
+    });
+  }
+
+  kpi+=`\n\n━━━  매출 현황  ━━━\n\n  API 연동 필요`;
+
+  if(holdCamps.length||closedCamps.length){
+    kpi+=`\n\n━━━  보류·종결  ━━━\n`;
+    if(holdCamps.length){kpi+=`\n  ⏸ 보류 ${holdCamps.length}건`;const g=groupByReason(holdCamps);Object.entries(g).forEach(([r,n])=>{kpi+=`\n     [${r}] ${n.length}건: ${n.join(', ')}`})}
+    if(closedCamps.length){kpi+=`\n  ⚫ 종결 ${closedCamps.length}건`;const g=groupByReason(closedCamps);Object.entries(g).forEach(([r,n])=>{kpi+=`\n     [${r}] ${n.length}건: ${n.join(', ')}`})}
+  }
+
+  kpi+=`\n\n━━━━━━━━━━━━━━━━━━━━\n🔗 대시보드: http://picco-dashboard.s3-website.ap-northeast-2.amazonaws.com/ops/`;
+  return kpi;
+}
+
+function copySlackKPI(){
+  const text=document.getElementById('slackKPI').textContent;
+  navigator.clipboard.writeText(text).then(()=>showToast('Slack KPI 보고 복사 완료!')).catch(()=>{
+    const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);showToast('Slack KPI 보고 복사 완료!');
+  });
+}
+
+// ==================== CALENDAR ====================
+function renderCalendar(el){
+  const year=calYear,month=calMonth;
+  const firstDay=new Date(year,month,1);
+  const lastDay=new Date(year,month+1,0);
+  const startDay=firstDay.getDay(); // 0=Sun
+  const totalDays=lastDay.getDate();
+  const today=new Date();
+  const todayStr=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+
+  // 미팅/계약 이벤트 수집
+  const events={};
+  camps.forEach(c=>{
+    if(c.nextMeeting){
+      const d=c.nextMeeting.slice(0,10);
+      if(!events[d])events[d]=[];
+      const mtype=c.status==='미팅 조율'?'meeting-pending':'meeting';
+      events[d].push({type:mtype,name:c.name,md:c.md||'',region:c.region||'',status:c.status,time:c.meetingTime||'',visitor:c.meetingVisitor||'',purpose:c.meetingPurpose||''});
+    }
+    if(c.contractDate){
+      const d=c.contractDate.slice(0,10);
+      if(!events[d])events[d]=[];
+      events[d].push({type:'contract',name:c.name,md:c.md||'',region:c.region||''});
+    }
+    if(c.liveDate){
+      const d=c.liveDate.slice(0,10);
+      if(!events[d])events[d]=[];
+      events[d].push({type:'live',name:c.name,md:c.md||'',region:c.region||''});
+    }
+  });
+
+  const monthStr=`${year}년 ${month+1}월`;
+
+  // 미팅 관련 캠핑장 분류
+  const meetingConfirmed=camps.filter(c=>c.status==='미팅 확정');
+  const meetingPending=camps.filter(c=>c.status==='미팅 조율');
+  const meetingAll=[...meetingConfirmed,...meetingPending];
+  const withDate=meetingAll.filter(c=>c.nextMeeting);
+  const withoutDate=meetingAll.filter(c=>!c.nextMeeting);
+
+  // 전체 예정 미팅 (날짜 있는 것) 카운트
+  const upcomingMeetings=camps.filter(c=>c.nextMeeting&&new Date(c.nextMeeting)>=new Date(todayStr));
+
+  let html=`
+  <!-- 미팅 현황 요약 -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
+      <div style="font-size:32px;font-weight:900;color:var(--purple)">${meetingAll.length}</div>
+      <div style="font-size:12px;color:var(--muted)">전체 미팅 대상</div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--accent);border-radius:10px;padding:14px;text-align:center">
+      <div style="font-size:32px;font-weight:900;color:var(--accent)">${meetingConfirmed.length}</div>
+      <div style="font-size:12px;color:var(--muted)">미팅 확정</div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--yellow);border-radius:10px;padding:14px;text-align:center">
+      <div style="font-size:32px;font-weight:900;color:var(--yellow)">${meetingPending.length}</div>
+      <div style="font-size:12px;color:var(--muted)">일정 조율 중</div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--green);border-radius:10px;padding:14px;text-align:center">
+      <div style="font-size:32px;font-weight:900;color:var(--green)">${upcomingMeetings.length}</div>
+      <div style="font-size:12px;color:var(--muted)">향후 미팅 예정</div>
+    </div>
+  </div>
+
+  ${withoutDate.length?`
+  <div style="background:#92400e22;border:1px solid var(--yellow);border-radius:10px;padding:14px;margin-bottom:16px">
+    <div style="font-size:13px;font-weight:700;color:var(--yellow);margin-bottom:10px">⚠️ 일정 미확정 — 조율 필요 (${withoutDate.length}건)</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px">
+      ${withoutDate.map(c=>`
+        <div onclick="openEditModal('${campKey(c)}')" style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 12px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:6px;transition:.15s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+          <span>${c.status==='미팅 확정'?'🟡':'🟠'}</span>
+          <b style="color:#fff">${c.name}</b>
+          ${c.md?`<span style="background:var(--accent);color:#000;font-size:9px;font-weight:700;padding:1px 6px;border-radius:3px">${c.md}</span>`:''}
+          ${c.region?`<span style="color:var(--muted);font-size:10px">📍${c.region}</span>`:''}
+          <span style="color:${c.status==='미팅 확정'?'var(--accent)':'var(--yellow)'};font-size:10px">${c.status}</span>
+        </div>
+      `).join('')}
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px">카드를 클릭하면 미팅 일정을 등록할 수 있습니다.</div>
+  </div>`:''}
+
+  <div class="cal-nav">
+    <button onclick="calMonth--;if(calMonth<0){calMonth=11;calYear--}render()">&larr; 이전</button>
+    <button onclick="calYear=new Date().getFullYear();calMonth=new Date().getMonth();render()">오늘</button>
+    <button onclick="calMonth++;if(calMonth>11){calMonth=0;calYear++}render()">다음 &rarr;</button>
+    <span class="cal-title">${monthStr}</span>
+  </div>
+
+  <div style="display:flex;gap:12px;margin-bottom:12px;font-size:11px;color:var(--muted)">
+    <span><span style="display:inline-block;width:10px;height:10px;background:var(--purple);border-radius:2px;margin-right:4px"></span>미팅 확정</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:var(--yellow);border-radius:2px;margin-right:4px"></span>미팅 조율</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:var(--green);border-radius:2px;margin-right:4px"></span>계약</span>
+  </div>
+
+  <div class="cal-grid">
+    <div class="cal-header">일</div><div class="cal-header">월</div><div class="cal-header">화</div>
+    <div class="cal-header">수</div><div class="cal-header">목</div><div class="cal-header">금</div><div class="cal-header">토</div>`;
+
+  // 이전 달 빈 칸
+  const prevMonthLast=new Date(year,month,0).getDate();
+  for(let i=startDay-1;i>=0;i--){
+    const d=prevMonthLast-i;
+    html+=`<div class="cal-day other-month"><div class="day-num">${d}</div></div>`;
+  }
+
+  // 현재 달
+  for(let d=1;d<=totalDays;d++){
+    const dateStr=`${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isToday=dateStr===todayStr;
+    const dayEvents=events[dateStr]||[];
+    html+=`<div class="cal-day ${isToday?'today':''}">
+      <div class="day-num">${d}</div>`;
+    dayEvents.sort((a,b)=>(a.time||'99:99').localeCompare(b.time||'99:99'));
+    dayEvents.forEach(ev=>{
+      const typeClass=ev.type==='meeting'?'meeting':ev.type==='meeting-pending'?'meeting':ev.type==='contract'?'contract':'live';
+      const icon=ev.type==='meeting'?'🤝':ev.type==='meeting-pending'?'🟠':ev.type==='contract'?'📝':'🟢';
+      const timeStr=ev.time?ev.time+' ':'';
+      let people='';
+      if(ev.md)people+=`<span style="color:var(--accent);font-size:9px">MD:${ev.md}</span>`;
+      if(ev.visitor)people+=`<span style="color:#fbbf24;font-size:9px"> 👤${ev.visitor}</span>`;
+      html+=`<div class="cal-event ${typeClass}" onclick="event.stopPropagation();openEditModal('${ev.name}')" title="${ev.name} ${timeStr}담당:${ev.md||'-'} 방문:${ev.visitor||'-'} ${ev.purpose||''} ${ev.region}" style="white-space:normal;overflow:visible;line-height:1.4">
+        ${icon} ${timeStr}<b>${ev.name}</b><br>${people}
+      </div>`;
+    });
+    html+=`</div>`;
+  }
+
+  // 다음 달 빈 칸
+  const endDay=new Date(year,month,totalDays).getDay();
+  for(let i=1;i<=6-endDay;i++){
+    html+=`<div class="cal-day other-month"><div class="day-num">${i}</div></div>`;
+  }
+
+  html+=`</div>
+
+  <!-- 이번 달 미팅 목록 -->
+  <div style="margin-top:24px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px">
+    <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:12px">${monthStr} 미팅 일정</div>
+    ${(()=>{
+      const monthEvents=[];
+      Object.entries(events).forEach(([date,evs])=>{
+        if(date.startsWith(`${year}-${String(month+1).padStart(2,'0')}`)){
+          evs.filter(e=>e.type==='meeting'||e.type==='meeting-pending').forEach(e=>monthEvents.push({...e,date}));
+        }
+      });
+      monthEvents.sort((a,b)=>a.date.localeCompare(b.date));
+      if(!monthEvents.length)return '<div style="font-size:12px;color:var(--muted)">이번 달 예정된 미팅이 없습니다.</div>';
+      return monthEvents.map(e=>{
+        const isPending=e.type==='meeting-pending';
+        const statusBadge=isPending
+          ?`<span style="background:#92400e;color:#fbbf24;font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px">조율 중</span>`
+          :`<span style="background:#3b2f63;color:#c4b5fd;font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px">확정</span>`;
+        return `
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #1a1f2b;font-size:13px;cursor:pointer;${isPending?'border-left:3px solid var(--yellow);padding-left:10px':''}" onclick="openEditModal('${e.name}')">
+          <span style="font-weight:700;color:var(--purple);min-width:90px">${e.date}</span>
+          <span style="color:var(--accent);min-width:45px;font-weight:600">${e.time||''}</span>
+          ${statusBadge}
+          <span style="color:#fff;font-weight:600">${e.name}</span>
+          ${e.md?`<span style="font-size:11px;color:var(--accent)">MD: ${e.md}</span>`:''}
+          ${e.visitor?`<span style="font-size:11px;color:var(--yellow)">👤 방문: ${e.visitor}</span>`:''}
+          ${e.region?`<span style="color:var(--muted);font-size:11px">📍 ${e.region}</span>`:''}
+          ${e.purpose?`<span style="font-size:11px;color:var(--muted)">${e.purpose}</span>`:''}
+          <button class="edit-btn" onclick="event.stopPropagation();openEditModal('${e.name}')" style="margin-left:auto">✏️</button>
+        </div>`;
+      }).join('');
+    })()}
+  </div>`;
+
+  el.innerHTML=html;
+}
+
+// ==================== PIPELINE ====================
+
+// 대분류 집계용 매핑
+const PIPELINE_GROUPS={
+  '상담·접수':['신규 접수','미팅 조율','재접촉 필요'],
+  '미팅 진행':['미팅 확정'],
+  '계약 진행':['계약 협의','계약 확정','계약 완료'],
+  '운영 중':['앱 라이브'],
+  '특수 프로젝트':['MOU 체결'],
+  '보류·종결':['보류','종결'],
+};
+
+function renderPipeline(el){
+  // 대분류 집계
+  const megaCounts={};
+  for(const[mega,statuses] of Object.entries(PIPELINE_GROUPS)){
+    megaCounts[mega]=camps.filter(c=>statuses.includes(c.status)).length;
+  }
+
+  // 상단 버튼
+  let html=`<div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+    <button onclick="openCreateModal()" style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:8px 16px;font-weight:700;cursor:pointer;font-size:13px">+ 새 캠핑장 등록</button>
+  </div>`;
+
+  // Summary cards
+  html+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px">';
+  const megaStyles={
+    '상담·접수':{color:'#8b949e'},
+    '미팅 진행':{color:'#8b949e'},
+    '계약 진행':{color:'#c9d1d9'},
+    '운영 중':{color:'#c9d1d9'},
+    '특수 프로젝트':{color:'#8b949e'},
+    '보류·종결':{color:'#8b949e'},
+  };
+  html+=`<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center">
+    <div style="font-size:28px;font-weight:800;color:#fff">${camps.length}</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:2px">전체</div>
+  </div>`;
+  for(const[mega,count] of Object.entries(megaCounts)){
+    const st=megaStyles[mega]||{color:'#8b949e'};
+    html+=`<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center">
+      <div style="font-size:28px;font-weight:800;color:${st.color}">${count}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">${mega}</div>
+    </div>`;
+  }
+  html+='</div>';
+
+  // 칸반 보드 (세분화)
+  const groups={};
+  STAGES.forEach(s=>groups[s]=[]);
+  groups['보류/종결']=[];
+  camps.forEach(c=>{if(groups[c.status])groups[c.status].push(c);else groups['보류/종결'].push(c)});
+
+  // 각 열 내부 가나다순 정렬
+  Object.keys(groups).forEach(k=>{
+    groups[k].sort((a,b)=>(a.name||'').localeCompare(b.name||'','ko'));
+  });
+
+  html+='<div class="kanban">';
+  [...STAGES,'보류/종결'].forEach(stage=>{
+    const items=groups[stage]||[];
+    // 계약 관련 컬럼 강조
+    const isContractCol=['계약 협의','계약 확정'].includes(stage);
+    const isMouCol=stage==='MOU 체결';
+    const colStyle=isContractCol?'border-color:#2a3a5a':isMouCol?'border-color:#3a3020':'';
+    html+=`<div class="kanban-col" style="${colStyle}"><div class="kanban-head">${stage}<span class="cnt">${items.length}</span></div><div class="kanban-body">`;
+    items.forEach(c=>{
+      const pk=campKey(c);
+      const si=STAGES.indexOf(c.status);
+      let btns='';
+      if(si>0)btns+=`<button onclick="event.stopPropagation();changeCampStatus('${pk}','${STAGES[si-1]}')">&larr;</button>`;
+      if(si>=0&&si<STAGES.length-1)btns+=`<button onclick="event.stopPropagation();changeCampStatus('${pk}','${STAGES[si+1]}')">&rarr;</button>`;
+      html+=`<div class="k-card" onclick="openDetail('${pk}')">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">
+          <div style="font-size:14px;font-weight:700;color:#fff">${c.name||pk}</div>
+          <span style="font-size:11px;color:var(--muted);white-space:nowrap">${c.md||''}</span>
+        </div>
+        ${c.region?`<div style="font-size:11px;color:var(--muted);margin-bottom:2px">${c.region}</div>`:''}
+        ${c.notes?`<div class="info">${trunc(c.notes,50)}</div>`:''}
+        <div class="actions">${btns}<button class="edit-btn" onclick="event.stopPropagation();openEditModal('${pk}')">✏️ 수정</button></div>
+      </div>`;
+    });
+    html+='</div></div>';
+  });
+  html+='</div>';
+
+  // 🗑 삭제됨 (휴지통)
+  if(deletedCamps.length){
+    html+=`<div style="margin-top:24px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px">
+      <div style="font-size:13px;font-weight:700;color:var(--muted);margin-bottom:10px">🗑 휴지통 (${deletedCamps.length}건)</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">`;
+    deletedCamps.forEach(c=>{
+      html+=`<div style="background:#0d1117;border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;color:var(--muted)">
+        ${c.name||campKey(c)}${c.region?' · '+c.region:''}
+      </div>`;
+    });
+    html+=`</div></div>`;
+  }
+
+  el.innerHTML=html;
+}
+
+// === 세팅 준비 과업 그룹 (계약 협의/확정 캠핑장용) ===
+const PREP_GROUPS=[
+  {cat:'계약준비',color:'#f97583',tasks:['계약서서명','올인원동의서','사업자정보변경']},
+  {cat:'플랫폼세팅',color:'#3fb950',tasks:['플랜전환','CS챗봇세팅','안심취소활성화','상품리뉴얼']},
+  {cat:'마케팅준비',color:'#fbbf24',tasks:['기획전등록','검색광고세팅','타사채널해지']},
+];
+
+// ==================== OPERATIONS MATRIX ====================
+function renderMatrix(el){
+  const liveCamps=camps.filter(c=>['앱 라이브'].includes(c.status));
+  const prepCamps=camps.filter(c=>['계약 확정','계약 협의'].includes(c.status));
+  const allActive=camps.filter(c=>!['보류','종결','MOU 체결'].includes(c.status));
+
+  const campTaskMap={};
+  tasks.forEach(t=>{
+    const pk=t.PK||'';
+    if(!campTaskMap[pk])campTaskMap[pk]=[];
+    campTaskMap[pk].push(t);
+  });
+
+  const targetCamps=matrixScope==='live'?liveCamps:matrixScope==='active'?allActive:camps;
+  const matrixMd=document.getElementById('mx-md')?.value||'';
+  const matrixSort=document.getElementById('mx-sort')?.value||'status';
+  let filtered=[...targetCamps];
+  if(matrixMd)filtered=filtered.filter(c=>c.md===matrixMd);
+  if(matrixSort==='name')filtered.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  else if(matrixSort==='rate'){
+    filtered.sort((a,b)=>{
+      const ra=calcRate(a,campTaskMap),rb=calcRate(b,campTaskMap);
+      return rb-ra;
+    });
+  }else if(matrixSort==='md')filtered.sort((a,b)=>(a.md||'zzz').localeCompare(b.md||'zzz'));
+
+  const mds=[...new Set(camps.map(c=>c.md).filter(Boolean))].sort();
+
+  let html=`
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
+    <div class="matrix-tabs" style="margin:0;display:flex;gap:6px">
+      <div class="matrix-tab ${matrixScope==='live'?'active':''}" onclick="matrixScope='live';render()">운영 중 (${liveCamps.length})</div>
+      <div class="matrix-tab ${matrixScope==='prep'?'active':''}" onclick="matrixScope='prep';render()">세팅 준비 (${prepCamps.length})</div>
+      <div class="matrix-tab ${matrixScope==='all'?'active':''}" onclick="matrixScope='all';render()">전체 (${liveCamps.length+prepCamps.length})</div>
+    </div>
+    <span style="color:var(--border);font-size:14px">|</span>
+    <select id="mx-sort" onchange="render()" style="background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px">
+      <option value="status" ${matrixSort==='status'?'selected':''}>상태순</option>
+      <option value="rate" ${matrixSort==='rate'?'selected':''}>완료율순</option>
+      <option value="md" ${matrixSort==='md'?'selected':''}>MD순</option>
+      <option value="name" ${matrixSort==='name'?'selected':''}>이름순</option>
+    </select>
+  </div>
+  <!-- 담당자(MD) 필터 버튼 -->
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
+    <span style="font-size:11px;color:var(--muted);font-weight:600;margin-right:4px">👤 담당자</span>
+    <input type="hidden" id="mx-md" value="${matrixMd}">
+    <div class="matrix-tab ${!matrixMd?'active':''}" onclick="document.getElementById('mx-md').value='';render()" style="font-size:11px;padding:4px 10px">전체</div>
+    ${mds.map(m=>{
+      const mdCount=camps.filter(c=>c.md===m&&(matrixScope==='live'?c.status==='앱 라이브':matrixScope==='prep'?['계약 확정','계약 협의'].includes(c.status):!['보류','종결','MOU 체결'].includes(c.status))).length;
+      return `<div class="matrix-tab ${matrixMd===m?'active':''}" onclick="document.getElementById('mx-md').value='${m}';render()" style="font-size:11px;padding:4px 10px">${m} <span style="opacity:.6">(${mdCount})</span></div>`;
+    }).join('')}
+  </div>
+  <div class="matrix-legend">
+    <span><span class="signal sig-done" style="width:14px;height:14px;font-size:9px;line-height:14px">✅</span> 완료</span>
+    <span><span class="signal sig-wip" style="width:14px;height:14px;font-size:9px;line-height:14px">🔄</span> 진행중</span>
+    <span><span class="signal sig-ext" style="width:14px;height:14px;font-size:9px;line-height:14px">⏳</span> 외부대기</span>
+    <span><span class="signal sig-todo" style="width:14px;height:14px;font-size:9px;line-height:14px">⬜</span> 미시작</span>
+    <span><span class="signal sig-hold" style="width:14px;height:14px;font-size:9px;line-height:14px">⏸</span> 보류</span>
+  </div>`;
+
+  // Render helper: build a matrix table for given camps + task groups
+  function buildMatrix(targetCamps, taskGroups, taskTypeFilter){
+    if(!targetCamps.length) return '<div style="padding:20px;text-align:center;color:var(--muted)">해당 캠핑장이 없습니다.</div>';
+    let h='<div class="matrix-wrap"><table class="matrix"><thead><tr><th rowspan="2" style="min-width:130px;vertical-align:bottom">캠핑장</th>';
+    h+='<th rowspan="2" style="min-width:90px;vertical-align:bottom;font-size:11px;color:var(--accent)">플랜 적용일</th>';
+    taskGroups.forEach(g=>{
+      h+=`<th colspan="${g.tasks.length}" style="background:${g.color}22;color:${g.color};border-bottom:2px solid ${g.color};font-size:11px;letter-spacing:1px">${g.cat}</th>`;
+    });
+    h+='<th rowspan="2" style="min-width:55px;vertical-align:bottom">완료율</th>';
+    h+='<th rowspan="2" style="min-width:120px;vertical-align:bottom;font-size:11px;color:var(--yellow)">메모</th>';
+    h+='</tr><tr>';
+    taskGroups.forEach(g=>{
+      g.tasks.forEach((t,i)=>{
+        h+=`<th style="font-size:10px;padding:4px 3px;${i===0?'border-left:2px solid '+g.color+'33':''}">${t}</th>`;
+      });
+    });
+    h+='</tr></thead><tbody>';
+    targetCamps.forEach(c=>{
+      const pk=campKey(c);
+      const ct=(campTaskMap[c.PK]||[]).filter(t=>t.taskType===taskTypeFilter||(t.taskName||'').startsWith(taskTypeFilter==='standard'?'OP_':'PREP_'));
+      const done=ct.filter(t=>t.status==='완료').length;
+      const total=ct.length||taskGroups.flatMap(g=>g.tasks).length;
+      const rate=Math.round(done/total*100);
+      const barColor=rate>=80?'var(--green)':rate>=50?'var(--yellow)':'var(--red)';
+      // 플랜 적용일자
+      const planDate=c.planStartDate||'';
+      const planDisplay=planDate?new Date(planDate).toLocaleDateString('ko-KR',{year:'numeric',month:'short',day:'numeric'}):'';
+      // 메모 (첫 줄만 미리보기)
+      const memoRaw=(c.matrixMemo||c.notes||'').trim();
+      const memoPreview=memoRaw?memoRaw.split('\\n')[0].slice(0,40)+(memoRaw.length>40?'...':''):'';
+      const memoEscaped=memoRaw.replace(/'/g,"\\'").replace(/\n/g,'\\n');
+
+      h+=`<tr><td onclick="openDetail('${pk}')" style="cursor:pointer">${campSignal(c)} <b>${c.name||pk}</b><div style="font-size:9px;color:var(--muted);font-weight:400">${c.status}${c.md?' · '+c.md:''}</div></td>`;
+      // 플랜 적용일 셀
+      h+=`<td style="font-size:11px;color:${planDate?'var(--accent)':'#333'};white-space:nowrap">${planDisplay||'<span style="color:#333">—</span>'}</td>`;
+      taskGroups.forEach(g=>{
+        g.tasks.forEach((taskTitle,i)=>{
+          const bl=i===0?`border-left:2px solid ${g.color}33;`:'';
+          const match=ct.find(t=>t.title===taskTitle||(t.taskName||'').includes(taskTitle));
+          if(match){
+            const st=SIG_MAP[match.status]||{cls:'sig-na',icon:'?'};
+            h+=`<td style="${bl}"><span class="signal ${st.cls}" title="${taskTitle}: ${match.status}" onclick="cycleStatus('${pk}','${match.taskName||match.SK?.replace('TASK#','')}')">${st.icon}</span></td>`;
+          }else{
+            const tPrefix=taskTypeFilter==='standard'?'OP_':'PREP_';
+            const tName=tPrefix+taskTitle.replace(/\s/g,'');
+            h+=`<td style="${bl}"><span class="signal sig-na" style="cursor:pointer" title="${taskTitle}: 클릭하여 과업 생성" onclick="createAndCycleTask('${pk}','${tName}','${taskTitle}')"">—</span></td>`;
+          }
+        });
+      });
+      h+=`<td><div style="font-size:12px;font-weight:700;color:${barColor}">${rate}%</div><div class="progress-bar"><div class="progress-fill" style="width:${rate}%;background:${barColor}"></div></div></td>`;
+      // 메모 셀
+      h+=`<td class="mx-memo-cell" style="text-align:left">
+        <div class="mx-memo-text ${memoRaw?'':'empty'}" onclick="openMatrixMemo(this,'${pk}')" title="${memoRaw?memoRaw.replace(/"/g,'&quot;'):'클릭하여 메모 추가'}">${memoPreview||'+ 메모'}</div>
+      </td>`;
+      h+=`</tr>`;
+    });
+    h+='</tbody></table></div>';
+    return h;
+  }
+
+  if(matrixScope==='live'||matrixScope==='all'){
+    // 운영 중 (앱 라이브)
+    let liveFiltered=[...liveCamps];
+    if(matrixMd)liveFiltered=liveFiltered.filter(c=>c.md===matrixMd);
+    if(matrixSort==='rate')liveFiltered.sort((a,b)=>calcRate(b,campTaskMap,'standard')-calcRate(a,campTaskMap,'standard'));
+    html+=`<div style="font-size:14px;font-weight:700;color:var(--green);margin:12px 0 8px;padding:8px 12px;background:#064e3b22;border-left:3px solid var(--green);border-radius:4px">🟢 운영 중 (${liveFiltered.length}개소)</div>`;
+    html+=buildMatrix(liveFiltered,OP_GROUPS,'standard');
+  }
+
+  if(matrixScope==='prep'||matrixScope==='all'){
+    // 세팅 준비 (계약 확정 + 협의)
+    let prepFiltered=[...prepCamps];
+    if(matrixMd)prepFiltered=prepFiltered.filter(c=>c.md===matrixMd);
+    if(matrixSort==='rate')prepFiltered.sort((a,b)=>calcRate(b,campTaskMap,'prep')-calcRate(a,campTaskMap,'prep'));
+    html+=`<div style="font-size:14px;font-weight:700;color:var(--accent);margin:20px 0 8px;padding:8px 12px;background:#1e3a5f33;border-left:3px solid var(--accent);border-radius:4px">🔵 세팅 준비 중 — 계약 확정·협의 (${prepFiltered.length}개소)</div>`;
+    html+=buildMatrix(prepFiltered,PREP_GROUPS,'prep');
+  }
+
+  el.innerHTML=html;
+}
+
+function calcRate(camp,campTaskMap,type='standard'){
+  const ct=campTaskMap[camp.PK]||[];
+  const prefix=type==='standard'?'OP_':'PREP_';
+  const op=ct.filter(t=>t.taskType===type||(t.taskName||'').startsWith(prefix));
+  const done=op.filter(t=>t.status==='완료').length;
+  return op.length?Math.round(done/op.length*100):0;
+}
+
+async function cycleStatus(campId,taskName){
+  // Cycle through statuses on click
+  const task=tasks.find(t=>(campKey2(t)===campId)&&(t.taskName===taskName||t.SK===`TASK#${taskName}`));
+  if(!task)return;
+  const curIdx=TASK_STATUSES.indexOf(task.status);
+  const nextIdx=(curIdx+1)%TASK_STATUSES.length;
+  const newStatus=TASK_STATUSES[nextIdx];
+  try{
+    const res=await fetch(`${API}/api/tasks/${encodeURIComponent(campId)}/${encodeURIComponent(taskName)}`,{
+      method:'PUT',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({status:newStatus})
+    });
+    const json=await res.json();
+    if(json.success){addLog('task',campId,`과업 ${taskName} → ${newStatus}`);showToast(`${taskName} → ${newStatus}`);loadAll()}
+    else showToast(json.error||'실패','var(--red)');
+  }catch(e){showToast('오류','var(--red)')}
+}
+
+// ==================== CAMPS ====================
+function renderCamps(el){
+  // Stats
+  const statusCounts={};
+  camps.forEach(c=>{statusCounts[c.status]=(statusCounts[c.status]||0)+1});
+
+  let html='<div class="stats-row">';
+  const statItems=[
+    {label:'전체',num:camps.length,color:'#fff'},
+    {label:'라이브',num:statusCounts['앱 라이브']||0,color:'var(--green)'},
+    {label:'계약',num:(statusCounts['계약 확정']||0)+(statusCounts['계약 완료']||0)+(statusCounts['계약 협의']||0),color:'var(--accent)'},
+    {label:'미팅',num:(statusCounts['미팅 확정']||0)+(statusCounts['미팅 조율']||0),color:'var(--purple)'},
+    {label:'신규',num:statusCounts['신규 접수']||0,color:'var(--muted)'},
+    {label:'보류/종결',num:(statusCounts['보류']||0)+(statusCounts['종결']||0),color:'var(--red)'},
+  ];
+  statItems.forEach(s=>{
+    html+=`<div class="stat-card"><div class="num" style="color:${s.color}">${s.num}</div><div class="label">${s.label}</div></div>`;
+  });
+  html+='</div>';
+
+  // Sort/filter controls
+  const sortBy=document.getElementById('cf-sort')?.value||'status';
+  const filterMd=document.getElementById('cf-md')?.value||'';
+  const filterRegion=document.getElementById('cf-region')?.value||'';
+  const searchQ=document.getElementById('cf-search')?.value?.toLowerCase()||'';
+
+  const mds=[...new Set(camps.map(c=>c.md).filter(Boolean))].sort();
+  const regions=[...new Set(camps.map(c=>c.region).filter(Boolean))].sort();
+
+  html+=`<div class="camp-controls">
+    <select id="cf-sort" onchange="render()">
+      <option value="status" ${sortBy==='status'?'selected':''}>상태별 정렬</option>
+      <option value="region" ${sortBy==='region'?'selected':''}>지역별 정렬</option>
+      <option value="md" ${sortBy==='md'?'selected':''}>MD별 정렬</option>
+      <option value="sites" ${sortBy==='sites'?'selected':''}>사이트 수 (많은순)</option>
+      <option value="name" ${sortBy==='name'?'selected':''}>이름순</option>
+    </select>
+    <select id="cf-md" onchange="render()"><option value="">전체 MD</option>${mds.map(m=>`<option ${filterMd===m?'selected':''}>${m}</option>`).join('')}</select>
+    <select id="cf-region" onchange="render()"><option value="">전체 지역</option>${regions.map(r=>`<option ${filterRegion===r?'selected':''}>${r}</option>`).join('')}</select>
+    <input id="cf-search" placeholder="검색..." value="${searchQ}" oninput="render()" style="min-width:120px">
+  </div>`;
+
+  // Filter
+  let filtered=[...camps];
+  if(filterMd)filtered=filtered.filter(c=>c.md===filterMd);
+  if(filterRegion)filtered=filtered.filter(c=>c.region===filterRegion);
+  if(searchQ)filtered=filtered.filter(c=>(c.name||'').toLowerCase().includes(searchQ)||(c.notes||'').toLowerCase().includes(searchQ));
+
+  // Sort & group
+  if(sortBy==='status'){
+    // Group by status
+    const grouped={};
+    STATUS_ORDER.forEach(s=>grouped[s]=[]);
+    filtered.forEach(c=>{
+      const s=c.status||'신규 접수';
+      if(!grouped[s])grouped[s]=[];
+      grouped[s].push(c);
+    });
+    STATUS_ORDER.forEach(status=>{
+      const items=grouped[status];
+      if(!items||!items.length)return;
+      const cls=STATUS_CLS[status]||'st-new';
+      const emoji=STATUS_EMOJI[status]||'';
+      html+=`<div class="status-group">
+        <div class="status-group-header"><span class="c-badge ${cls}" style="font-size:12px;padding:4px 10px">${emoji} ${status} (${items.length})</span></div>
+        <div class="camp-cards">${items.map(c=>campCard(c)).join('')}</div>
+      </div>`;
+    });
+  }else{
+    // Sort flat
+    if(sortBy==='region')filtered.sort((a,b)=>(a.region||'').localeCompare(b.region||''));
+    else if(sortBy==='md')filtered.sort((a,b)=>(a.md||'zzz').localeCompare(b.md||'zzz'));
+    else if(sortBy==='sites')filtered.sort((a,b)=>(b.siteCount||0)-(a.siteCount||0));
+    else if(sortBy==='name')filtered.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+
+    if(sortBy==='region'||sortBy==='md'){
+      const key=sortBy==='region'?'region':'md';
+      const groups={};
+      filtered.forEach(c=>{const k=c[key]||'미지정';if(!groups[k])groups[k]=[];groups[k].push(c)});
+      Object.entries(groups).forEach(([k,items])=>{
+        html+=`<div class="status-group">
+          <div class="status-group-header"><span style="color:var(--accent)">${k} (${items.length})</span></div>
+          <div class="camp-cards">${items.map(c=>campCard(c)).join('')}</div>
+        </div>`;
+      });
+    }else{
+      html+=`<div class="camp-cards">${filtered.map(c=>campCard(c)).join('')}</div>`;
+    }
+  }
+
+  el.innerHTML=html;
+}
+
+function campCard(c){
+  const pk=campKey(c);
+  const cls=STATUS_CLS[c.status]||'st-new';
+  const ct=tasks.filter(t=>t.PK===c.PK);
+  const done=ct.filter(t=>t.status==='완료').length;
+  const total=ct.length;
+  const rate=total?Math.round(done/total*100):0;
+  const barColor=rate>=80?'var(--green)':rate>=50?'var(--yellow)':'var(--red)';
+
+  return`<div class="camp-card" onclick="openDetail('${pk}')">
+    <div class="c-top">
+      <div class="c-name">${campSignal(c)} ${c.name||pk}</div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="edit-btn" onclick="event.stopPropagation();openEditModal('${pk}')">✏️ 수정</button>
+        <span class="c-badge ${cls}">${c.status}</span>
+      </div>
+    </div>
+    <div class="c-meta">
+      ${c.region?`<b>지역</b> ${c.region} &nbsp;`:''}
+      ${c.siteCount?`<b>사이트</b> ${c.siteCount}개 &nbsp;`:''}
+      ${c.md?`<b>MD</b> ${c.md} &nbsp;`:''}
+      ${c.contractDate?`<br><b>계약</b> ${c.contractDate}`:''}
+      ${c.nextMeeting?` &nbsp;<b>미팅</b> ${c.nextMeeting}`:''}
+    </div>
+    ${total?`<div class="c-tasks">
+      ${done?`<span class="sig-done" style="padding:1px 5px;border-radius:3px;font-size:10px">완료 ${done}</span>`:''}
+      ${total-done?`<span class="sig-todo" style="padding:1px 5px;border-radius:3px;font-size:10px">잔여 ${total-done}</span>`:''}
+      <span style="color:var(--muted);font-size:10px">${rate}%</span>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" style="width:${rate}%;background:${barColor}"></div></div>`:''}
+    ${c.notes?`<div class="c-notes">${trunc(c.notes,80)}</div>`:''}
+  </div>`;
+}
+
+// ==================== DETAIL PANEL ====================
+function openDetail(pk){
+  const c=camps.find(x=>campKey(x)===pk);
+  if(!c)return;
+  const ct=tasks.filter(t=>t.PK===c.PK);
+  const cls=STATUS_CLS[c.status]||'st-new';
+
+  let html=`<h3>${campSignal(c)} ${c.name||pk}</h3>
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
+    <span class="d-status ${cls}" style="margin:0">${c.status}</span>
+    <button class="edit-btn" onclick="openEditModal('${pk}')" style="font-size:12px;padding:4px 12px">✏️ 수정</button>
+  </div>
+  <div class="detail-section"><h4>기본 정보</h4>
+    ${dField('지역',c.region)}${dField('사이트',c.siteCount)}${dField('MD',c.md)}
+    ${dField('전화',c.phone)}${dField('계약일',c.contractDate)}${dField('플랜 적용일',c.planStartDate)}${dField('라이브',c.liveDate)}${dField('다음미팅',c.nextMeeting)}
+  </div>
+  ${c.revenue?`<div class="detail-section"><h4>25년도 매출</h4><div style="font-size:12px;color:var(--text);line-height:1.6;white-space:pre-wrap">${c.revenue}</div></div>`:''}
+  ${c.consultation?`<div class="detail-section"><h4>상담내용</h4><div style="font-size:12px;color:var(--text);line-height:1.6;white-space:pre-wrap">${c.consultation}</div></div>`:''}
+  ${c.notes?`<div class="detail-section"><h4>메모</h4><div style="font-size:12px;color:var(--text);line-height:1.6;white-space:pre-wrap">${c.notes}</div></div>`:''}
+  <div class="detail-section"><h4>과업 (${ct.length}건)</h4>`;
+  if(ct.length){
+    ct.forEach(t=>{
+      const st=SIG_MAP[t.status]||{cls:'sig-na',icon:'?'};
+      html+=`<div class="d-task">
+        <div class="tid">${t.taskName||'?'}</div>
+        <div class="ttitle">${t.title||''}</div>
+        <span class="signal ${st.cls}" style="width:20px;height:20px;font-size:10px;line-height:20px;cursor:pointer" onclick="cycleStatus('${pk}','${t.taskName||t.SK?.replace('TASK#','')}')">${st.icon}</span>
+      </div>`;
+    });
+  }else{
+    html+='<div style="font-size:12px;color:var(--muted)">등록된 과업 없음</div>';
+  }
+  html+='</div>';
+
+  document.getElementById('detailContent').innerHTML=html;
+  document.getElementById('detailPanel').classList.add('open');
+}
+
+function closeDetail(){document.getElementById('detailPanel').classList.remove('open')}
+function dField(l,v){return v?`<div class="d-field"><span class="label">${l}</span><span class="value">${v}</span></div>`:''}
+
+// ==================== CHAT ====================
+let chatHistory=[];
+let pendingAction=null; // 확정 대기 중인 액션
+
+function renderChat(el){
+  let html='<div class="chat-container"><div class="chat-messages" id="chatMessages">';
+  if(!chatHistory.length)html+=`<div style="padding:20px;color:var(--muted);font-size:12px;line-height:2">
+    <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:12px">PICCO 운영 챗봇</div>
+    <div style="color:var(--accent);font-weight:600;margin-bottom:4px">조회</div>
+    <div style="padding-left:8px">"모아이 현황" · "전체 현황" · "라이브 목록" · "진행률"</div>
+    <div style="color:var(--green);font-weight:600;margin:8px 0 4px">과업 변경</div>
+    <div style="padding-left:8px">"바샘 사진촬영 완료 처리" · "낭만 기획전 진행중으로 변경"</div>
+    <div style="color:var(--yellow);font-weight:600;margin:8px 0 4px">상태 변경</div>
+    <div style="padding-left:8px">"제천 상태 계약 완료로 변경" · "도마치 보류로 변경"</div>
+    <div style="color:var(--purple);font-weight:600;margin:8px 0 4px">메모 기록</div>
+    <div style="padding-left:8px">"바샘 메모: 3/17 현장 방문, 예약률 확인 필요"</div>
+    <div style="padding-left:8px">"모아이 전달: 캠프닉 4월 시작 예정, 장비 확인 요청"</div>
+    <div style="color:var(--red);font-weight:600;margin:8px 0 4px">미팅 보고</div>
+    <div style="padding-left:8px">"바샘 보고: 대표 만남. 펜션 추가 긍정적. 견적 요청함"</div>
+  </div>`;
+  chatHistory.forEach(m=>{
+    html+=`<div class="chat-msg ${m.role}">${m.text}</div>`;
+    // 확정 버튼 표시
+    if(m.pendingAction&&m===chatHistory[chatHistory.length-1]){
+      html+=`<div style="align-self:flex-start;margin-top:4px;display:flex;gap:6px">
+        <button onclick="confirmPending()" style="background:var(--green);color:#000;border:none;border-radius:6px;padding:8px 16px;font-weight:700;cursor:pointer;font-size:13px">✅ 확정 (DB 반영)</button>
+        <button onclick="cancelPending()" style="background:var(--card);color:var(--muted);border:1px solid var(--border);border-radius:6px;padding:8px 16px;cursor:pointer;font-size:13px">취소</button>
+      </div>`;
+    }
+  });
+  html+='</div><div class="chat-input"><input id="chatInput" placeholder="메시지를 입력하세요..." onkeydown="if(event.key===\'Enter\')sendChat()"><button onclick="sendChat()">전송</button></div></div>';
+  el.innerHTML=html;
+  const msgs=document.getElementById('chatMessages');
+  if(msgs)msgs.scrollTop=msgs.scrollHeight;
+}
+
+async function sendChat(){
+  const input=document.getElementById('chatInput');
+  const msg=input.value.trim();if(!msg)return;
+  input.value='';
+  chatHistory.push({role:'user',text:msg});render();
+  try{
+    const res=await fetch(`${API}/api/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg})});
+    const json=await res.json();
+    const reply=json.data?.reply||json.error||'응답 없음';
+    const msgObj={role:'bot',text:reply};
+    // pendingAction이 있으면 저장 + 메시지에 연결
+    if(json.data?.pendingAction){
+      pendingAction=json.data.pendingAction;
+      msgObj.pendingAction=true;
+      msgObj.text=reply+'\n\n⬇️ 아래 [확정] 버튼을 눌러야 실제 DB에 반영됩니다.';
+    }
+    chatHistory.push(msgObj);
+    // 즉시 실행된 액션이 있으면 전체 데이터 리로드 (await로 완료 대기)
+    if(json.data?.actions?.length) await loadAll();
+  }catch(e){chatHistory.push({role:'bot',text:'오류: '+e.message})}
+  render();
+}
+
+async function confirmPending(){
+  if(!pendingAction){showToast('확정할 작업이 없습니다','var(--red)');return}
+  chatHistory.push({role:'user',text:'✅ 확정'});
+  try{
+    const res=await fetch(`${API}/api/chat/confirm`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({pendingAction})
+    });
+    const json=await res.json();
+    const reply=json.data?.reply||json.data?.result?.message||'처리 완료';
+    chatHistory.push({role:'bot',text:reply});
+    pendingAction=null;
+    await loadAll(); // 데이터 리로드 (완료 대기)
+    showToast('DB 반영 완료 — 모든 탭에 즉시 반영');
+  }catch(e){chatHistory.push({role:'bot',text:'확정 실패: '+e.message})}
+  render();
+}
+
+function cancelPending(){
+  pendingAction=null;
+  chatHistory.push({role:'bot',text:'변경이 취소되었습니다.'});
+  render();
+}
+
+// ==================== EDIT MODAL ====================
+let currentEditTab='info';
+
+function toggleHoldReason(){
+  const status=document.getElementById('edit-status').value;
+  document.getElementById('holdReasonGroup').style.display=['보류','종결'].includes(status)?'block':'none';
+}
+
+function switchEditTab(tab){
+  currentEditTab=tab;
+  document.getElementById('editTabInfo').style.display=tab==='info'?'block':'none';
+  document.getElementById('editTabMeeting').style.display=tab==='meeting'?'block':'none';
+  document.getElementById('editTabMemo').style.display=tab==='memo'?'block':'none';
+  ['info','meeting','memo'].forEach(t=>{
+    const btn=document.getElementById('tab-'+t);
+    if(t===tab){btn.style.background='var(--accent)';btn.style.color='#000';btn.style.borderColor='var(--accent)';btn.style.fontWeight='700'}
+    else{btn.style.background='var(--card)';btn.style.color='var(--text)';btn.style.borderColor='var(--border)';btn.style.fontWeight='400'}
+  });
+}
+
+function openEditModal(pk){
+  const c=camps.find(x=>campKey(x)===pk);
+  if(!c){showToast('캠핑장을 찾을 수 없습니다','var(--red)');return}
+
+  document.getElementById('edit-pk').value=pk;
+  document.getElementById('edit-campName').value=c.campName||c.name||'';
+  document.getElementById('edit-status').value=c.status||'신규 접수';
+  document.getElementById('edit-md').value=c.md||'';
+  document.getElementById('edit-phone').value=c.phone||'';
+  document.getElementById('edit-region').value=c.region||'';
+  document.getElementById('edit-siteCount').value=c.siteCount||0;
+  document.getElementById('edit-contractDate').value=c.contractDate||'';
+
+  document.getElementById('edit-planStartDate').value=c.planStartDate||'';
+
+  // 미팅 필드
+  document.getElementById('edit-nextMeeting').value=c.nextMeeting?c.nextMeeting.slice(0,10):'';
+  document.getElementById('edit-meetingTime').value=c.meetingTime||'14:00';
+  document.getElementById('edit-meetingVisitor').value=c.meetingVisitor||c.md||'';
+  document.getElementById('edit-meetingPurpose').value=c.meetingPurpose||'';
+
+  // 메모 분리 필드
+  document.getElementById('edit-revenue').value=c.revenue||'';
+  document.getElementById('edit-consultation').value=c.consultation||'';
+  document.getElementById('edit-notes').value=c.notes||'';
+  document.getElementById('edit-memoNew').value='';
+  document.getElementById('edit-memoAuthor').value='';
+  document.getElementById('edit-memoType').value='';
+
+  // 메모 히스토리 표시
+  const memoHistory=document.getElementById('memoHistory');
+  if(c.notes){
+    const memos=c.notes.split('\n').filter(m=>m.trim());
+    memoHistory.innerHTML=memos.map(m=>{
+      const isType=m.match(/^\[.*?\]/);
+      const tagColor=m.includes('[미팅]')?'var(--purple)':m.includes('[전화]')?'var(--accent)':m.includes('[방문]')?'var(--green)':m.includes('[이슈]')?'var(--red)':'var(--muted)';
+      return `<div style="background:#0d1117;border-left:3px solid ${tagColor};border-radius:4px;padding:6px 10px;margin-bottom:4px;font-size:11px;color:var(--text);line-height:1.5">${m}</div>`;
+    }).join('');
+  }else{
+    memoHistory.innerHTML='<div style="font-size:11px;color:var(--muted)">기록된 메모가 없습니다.</div>';
+  }
+
+  document.getElementById('edit-holdReason').value=c.holdReason||'';
+  document.getElementById('edit-holdReasonPreset').value='';
+  toggleHoldReason();
+  document.getElementById('editModalTitle').textContent=`${c.name||pk} 수정`;
+  switchEditTab('info');
+  document.getElementById('editModal').classList.add('open');
+}
+
+function closeEditModal(){
+  document.getElementById('editModal').classList.remove('open');
+}
+
+async function saveEdit(e){
+  e.preventDefault();
+  const pk=document.getElementById('edit-pk').value;
+  const newStatus=document.getElementById('edit-status').value;
+  const signal=STATUS_EMOJI[newStatus]||'⚪';
+
+  // 메모 합치기: 새 메모가 있으면 기존 메모 앞에 추가
+  let notes=document.getElementById('edit-notes').value;
+  const newMemo=document.getElementById('edit-memoNew').value.trim();
+  const memoAuthor=document.getElementById('edit-memoAuthor').value.trim();
+  const memoType=document.getElementById('edit-memoType').value;
+  if(newMemo){
+    const now=new Date();
+    const dateStr=`${now.getMonth()+1}/${now.getDate()}`;
+    const typeTag=memoType?`[${memoType}]`:'';
+    const prefix=memoAuthor?`${typeTag}[${dateStr} ${memoAuthor}]`:`${typeTag}[${dateStr}]`;
+    notes=`${prefix} ${newMemo}\n${notes}`.trim();
+  }
+
+  // 미팅 시간 합쳐서 저장
+  let nextMeeting=document.getElementById('edit-nextMeeting').value;
+  const meetingTime=document.getElementById('edit-meetingTime').value;
+  const meetingVisitor=document.getElementById('edit-meetingVisitor').value;
+  const meetingPurpose=document.getElementById('edit-meetingPurpose').value;
+
+  const body={
+    status:newStatus,
+    signal:signal,
+    md:document.getElementById('edit-md').value,
+    region:document.getElementById('edit-region').value,
+    siteCount:parseInt(document.getElementById('edit-siteCount').value)||0,
+    nextMeeting:nextMeeting,
+    meetingTime:meetingTime,
+    meetingVisitor:meetingVisitor,
+    meetingPurpose:meetingPurpose,
+    contractDate:document.getElementById('edit-contractDate').value,
+    planStartDate:document.getElementById('edit-planStartDate').value,
+    notes:notes,
+    campName:document.getElementById('edit-campName').value,
+    holdReason:document.getElementById('edit-holdReason').value,
+    phone:document.getElementById('edit-phone').value,
+    revenue:document.getElementById('edit-revenue').value,
+    consultation:document.getElementById('edit-consultation').value,
+  };
+
+  try{
+    const res=await fetch(`${API}/api/camps/${encodeURIComponent(pk)}/profile`,{
+      method:'PUT',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(body)
+    });
+    const json=await res.json();
+    if(json.success){
+      const changes=[];
+      const oldCamp=camps.find(x=>campKey(x)===pk);
+      if(oldCamp){
+        if(oldCamp.status!==newStatus)changes.push(`상태: ${oldCamp.status} → ${newStatus}`);
+        if((oldCamp.md||'')!==body.md)changes.push(`담당자: ${oldCamp.md||'없음'} → ${body.md||'없음'}`);
+        if((oldCamp.region||'')!==body.region)changes.push(`지역: ${body.region}`);
+        if(body.nextMeeting&&oldCamp.nextMeeting!==body.nextMeeting)changes.push(`미팅일: ${body.nextMeeting} ${body.meetingTime||''}`);
+        if(newMemo)changes.push(`메모: ${newMemo}`);
+      }
+      addLog('edit',pk,changes.length?changes.join(' / '):'정보 수정');
+      showToast(`${pk} 정보가 저장되었습니다`);
+      closeEditModal();
+      await loadAll();
+    }else{
+      showToast(json.error||'수정 실패','var(--red)');
+    }
+  }catch(err){
+    showToast('API 오류: '+err.message,'var(--red)');
+  }
+}
+
+async function deleteCamp(){
+  const pk=document.getElementById('edit-pk').value;
+  if(!pk)return;
+  if(!confirm(`정말 "${pk}" 캠핑장을 삭제하시겠습니까?\n(소프트 삭제: 상태가 "삭제됨"으로 변경됩니다)`))return;
+  try{
+    const res=await fetch(`${API}/api/camps/${encodeURIComponent(pk)}`,{
+      method:'DELETE',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({pin:'1234'})
+    });
+    const json=await res.json();
+    if(json.success){
+      addLog('edit',pk,'삭제 처리');
+      showToast(`${pk} 삭제되었습니다`);
+      closeEditModal();
+      closeDetail();
+      await loadAll();
+    }else{
+      showToast(json.error||'삭제 실패','var(--red)');
+    }
+  }catch(err){
+    showToast('API 오류: '+err.message,'var(--red)');
+  }
+}
+
+// ==================== ACTIVITY LOGS ====================
+function renderLogs(el){
+  const logs=getActivityLogs();
+  const logIcons={create:'🆕',edit:'✏️',status:'🔄',task:'✅',note:'📝'};
+  const logColors={create:'var(--green)',edit:'var(--accent)',status:'var(--purple)',task:'var(--yellow)',note:'var(--muted)'};
+
+  // 날짜별 그룹
+  const grouped={};
+  logs.forEach(l=>{
+    const d=l.time.slice(0,10);
+    if(!grouped[d])grouped[d]=[];
+    grouped[d].push(l);
+  });
+
+  // 오늘 통계
+  const todayStr=new Date().toISOString().slice(0,10);
+  const todayLogs=grouped[todayStr]||[];
+  const todayCreates=todayLogs.filter(l=>l.type==='create').length;
+  const todayEdits=todayLogs.filter(l=>l.type==='edit').length;
+  const todayStatusChanges=todayLogs.filter(l=>l.type==='status').length;
+
+  let html=`
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div style="display:flex;gap:12px">
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 16px;font-size:12px">
+        오늘 활동 <b style="color:var(--green)">${todayLogs.length}</b>건
+        ${todayCreates?` · 신규 <b style="color:var(--green)">${todayCreates}</b>`:''}
+        ${todayEdits?` · 수정 <b style="color:var(--accent)">${todayEdits}</b>`:''}
+        ${todayStatusChanges?` · 상태변경 <b style="color:var(--purple)">${todayStatusChanges}</b>`:''}
+      </div>
+    </div>
+    <button onclick="if(confirm('전체 로그를 삭제하시겠습니까?')){localStorage.removeItem('picco_logs');render()}" style="background:var(--card);color:var(--muted);border:1px solid var(--border);border-radius:6px;padding:6px 12px;font-size:11px;cursor:pointer">로그 초기화</button>
+  </div>`;
+
+  if(!logs.length){
+    html+='<div style="text-align:center;padding:40px;color:var(--muted)">아직 기록된 활동이 없습니다.<br>캠핑장을 등록하거나 수정하면 자동으로 기록됩니다.</div>';
+    el.innerHTML=html;return;
+  }
+
+  Object.entries(grouped).forEach(([date,items])=>{
+    const isToday=date===todayStr;
+    html+=`<div style="margin-bottom:20px">
+      <div style="font-size:13px;font-weight:700;color:${isToday?'var(--accent)':'var(--muted)'};padding:8px 0;border-bottom:1px solid var(--border);margin-bottom:4px">
+        ${isToday?'오늘':date} <span style="font-weight:400;font-size:11px">(${items.length}건)</span>
+      </div>`;
+    items.forEach(l=>{
+      const t=new Date(l.time);
+      const timeStr=`${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')}`;
+      const icon=logIcons[l.type]||'📌';
+      const color=logColors[l.type]||'var(--muted)';
+      html+=`<div class="log-item">
+        <div class="log-time">${timeStr}</div>
+        <div class="log-icon">${icon}</div>
+        <div class="log-body"><b style="color:${color}">${l.camp}</b> ${l.detail||''}</div>
+      </div>`;
+    });
+    html+=`</div>`;
+  });
+
+  el.innerHTML=html;
+}
+
+// ==================== CREATE MODAL ====================
+function openCreateModal(){
+  document.getElementById('create-name').value='';
+  document.getElementById('create-status').value='신규 접수';
+  document.getElementById('create-md').value='';
+  document.getElementById('create-region').value='';
+  document.getElementById('create-siteCount').value='';
+  document.getElementById('create-nextMeeting').value='';
+  document.getElementById('create-notes').value='';
+  document.getElementById('createModal').classList.add('open');
+}
+
+function closeCreateModal(){
+  document.getElementById('createModal').classList.remove('open');
+}
+
+async function saveNewCamp(e){
+  e.preventDefault();
+  const name=document.getElementById('create-name').value.trim();
+  if(!name){showToast('캠핑장명을 입력해주세요','var(--red)');return}
+
+  const body={
+    name:name,
+    status:document.getElementById('create-status').value,
+    md:document.getElementById('create-md').value,
+    region:document.getElementById('create-region').value,
+    siteCount:parseInt(document.getElementById('create-siteCount').value)||0,
+    nextMeeting:document.getElementById('create-nextMeeting').value,
+    notes:document.getElementById('create-notes').value,
+    pin:'1234'
+  };
+
+  try{
+    const res=await fetch(`${API}/api/camps`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(body)
+    });
+    const json=await res.json();
+    if(json.success){
+      addLog('create',name,`신규 등록 (${body.status})${body.md?' MD:'+body.md:''}${body.region?' '+body.region:''}`);
+      showToast(`${name} 등록 완료`);
+      closeCreateModal();
+      await loadAll();
+    }else{
+      showToast(json.error||'등록 실패','var(--red)');
+    }
+  }catch(err){
+    showToast('API 오류: '+err.message,'var(--red)');
+  }
+}
+
+// ==================== CREATE TASK FROM MATRIX ====================
+async function createAndCycleTask(campId,taskName,title){
+  try{
+    // 먼저 과업 생성 시도 (미시작 상태로)
+    const res=await fetch(`${API}/api/tasks/${encodeURIComponent(campId)}/${encodeURIComponent(taskName)}`,{
+      method:'PUT',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({status:'미시작',title:title})
+    });
+    const json=await res.json();
+    if(json.success){
+      addLog('task',campId,`과업 ${taskName} 생성 (미시작)`);
+      showToast(`${campId} — ${title} 과업 생성`);
+      await loadAll();
+    }else{
+      showToast(json.error||'과업 생성 실패','var(--red)');
+    }
+  }catch(e){showToast('오류: '+e.message,'var(--red)')}
+}
+
+// ==================== MATRIX MEMO ====================
+function openMatrixMemo(el,pk){
+  // 기존 열린 에디터 닫기
+  document.querySelectorAll('.mx-memo-edit').forEach(e=>e.remove());
+  const c=camps.find(x=>campKey(x)===pk);
+  if(!c)return;
+  const memo=(c.matrixMemo||'').trim();
+  const cell=el.closest('.mx-memo-cell');
+  const editor=document.createElement('div');
+  editor.className='mx-memo-edit';
+  editor.innerHTML=`
+    <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:6px">${c.name} 메모</div>
+    <textarea id="mx-memo-ta">${memo}</textarea>
+    <div class="mx-memo-btns">
+      <button onclick="this.closest('.mx-memo-edit').remove()" style="background:var(--card);color:var(--muted)">취소</button>
+      <button onclick="saveMatrixMemo('${pk}')" style="background:var(--accent);color:#000;font-weight:700;border-color:var(--accent)">저장</button>
+    </div>
+  `;
+  cell.appendChild(editor);
+  editor.querySelector('textarea').focus();
+}
+
+async function saveMatrixMemo(pk){
+  const ta=document.getElementById('mx-memo-ta');
+  if(!ta)return;
+  const memo=ta.value.trim();
+  try{
+    const res=await fetch(`${API}/api/camps/${encodeURIComponent(pk)}/profile`,{
+      method:'PUT',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({matrixMemo:memo})
+    });
+    const json=await res.json();
+    if(json.success){
+      addLog('edit',pk,`현황판 메모 수정`);
+      showToast(`${pk} 메모 저장 완료`);
+      document.querySelectorAll('.mx-memo-edit').forEach(e=>e.remove());
+      await loadAll();
+    }else{
+      showToast(json.error||'저장 실패','var(--red)');
+    }
+  }catch(e){showToast('오류: '+e.message,'var(--red)')}
+}
+
+// 클릭 외부시 메모 에디터 닫기
+document.addEventListener('click',function(e){
+  if(!e.target.closest('.mx-memo-cell')&&!e.target.closest('.mx-memo-edit')){
+    document.querySelectorAll('.mx-memo-edit').forEach(el=>el.remove());
+  }
+});
+
+// ==================== UTILS ====================
+function campKey(c){return c.PK?.replace('CAMP#','')||c.name||''}
+function campKey2(t){return t.PK?.replace('CAMP#','')||''}
+function trunc(s,n){return s?.length>n?s.substring(0,n)+'...':s||''}
+function showToast(msg,bg='var(--green)'){const t=document.getElementById('toast');t.textContent=msg;t.style.background=bg;t.style.display='block';setTimeout(()=>t.style.display='none',3000)}
+
+async function changeCampStatus(campId,newStatus){
+  const signal=STATUS_EMOJI[newStatus]||'⚪';
+  try{
+    const res=await fetch(`${API}/api/camps/${encodeURIComponent(campId)}/profile`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:newStatus,signal})});
+    const json=await res.json();
+    if(json.success){addLog('status',campId,`상태 변경 → ${newStatus}`);showToast(`${campId} → ${newStatus}`);await loadAll()}
+    else showToast(json.error,'var(--red)');
+  }catch(e){showToast('오류','var(--red)')}
+}
+
+// Init
+loadAll();
+setInterval(loadAll,60000);
+</script>
+</body>
+</html>
