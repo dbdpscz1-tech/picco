@@ -491,13 +491,46 @@ const SIG_MAP={
   '보류':{cls:'sig-hold',icon:'⏸'}
 };
 
-// === 표준 운영 과업 (시간순, 카테고리별 그룹) ===
+// === 표준 운영 과업 — 엑셀 "진행 프로세스" A30:F56 기반 ===
 const OP_GROUPS=[
-  {cat:'계약관리',color:'#58a6ff',tasks:['계약서','부속합의서1호','공급가확정','부속합의서2호']},
-  {cat:'캠핏세팅',color:'#3fb950',tasks:['캠핏등록','CS챗봇','안심취소','얼리체크인']},
-  {cat:'콘텐츠',color:'#d2a8ff',tasks:['기획전','사진촬영','상세페이지','B2B상품','체험프로그램']},
-  {cat:'마케팅',color:'#fbbf24',tasks:['검색광고','네이버연동','슈퍼팬모집','리뷰관리']},
-  {cat:'운영',color:'#f97583',tasks:['캠프닉','이지캠핑','월간리포트']},
+  {cat:'계약',color:'#f97583',tasks:[
+    {id:'계약서',label:'피코계약서',type:'check'},
+    {id:'약정서',label:'캠핏약정서',type:'check'},
+  ]},
+  {cat:'세팅',color:'#3fb950',tasks:[
+    {id:'캠핏등록',label:'캠핏등록',type:'check'},
+    {id:'예약오픈',label:'예약1일오픈',type:'check'},
+    {id:'세팅확인',label:'세팅값확인',type:'check'},
+    {id:'캠핑케어',label:'캠핑케어폼',type:'check'},
+    {id:'플랜안내',label:'플랜안내',type:'check'},
+    {id:'온보딩',label:'온보딩요청',type:'check'},
+    {id:'네이버연동',label:'네이버연동',type:'check'},
+    {id:'카톡방',label:'카톡업무방',type:'check'},
+    {id:'사진소개',label:'사진소개글',type:'check'},
+    {id:'캠지기ID',label:'캠지기ID',type:'check'},
+    {id:'네이버ID',label:'네이버ID',type:'check'},
+    {id:'네이버050',label:'050번호',type:'check'},
+    {id:'예약링크',label:'예약링크',type:'check'},
+  ]},
+  {cat:'마케팅',color:'#fbbf24',tasks:[
+    {id:'인플루언서',label:'인플루언서',type:'input'},
+    {id:'슈퍼팬',label:'슈퍼팬',type:'input'},
+  ]},
+  {cat:'착한캠핑',color:'#58a6ff',tasks:[
+    {id:'얼리체크인',label:'얼리체크인',type:'input'},
+    {id:'레이트체크아웃',label:'레이트CO',type:'input'},
+    {id:'방문자무료',label:'방문자무료',type:'input'},
+  ]},
+  {cat:'단체·체험',color:'#d2a8ff',tasks:[
+    {id:'단체시설',label:'단체시설',type:'input'},
+    {id:'체험시설',label:'체험시설',type:'input'},
+    {id:'이지캠핑',label:'이지캠핑',type:'check'},
+  ]},
+  {cat:'주기운영',color:'#8b949e',tasks:[
+    {id:'월간사진',label:'월간사진',type:'periodic',note:'매월 5일 전달'},
+    {id:'리뷰작성',label:'리뷰작성',type:'periodic',note:'보름마다'},
+    {id:'사진변경',label:'사진변경',type:'periodic',note:'월간'},
+  ]},
 ];
 
 async function loadAll(){
@@ -1030,17 +1063,9 @@ function renderPipeline(el){
   el.innerHTML=html;
 }
 
-// === 세팅 준비 과업 그룹 (계약 협의/확정 캠핑장용) ===
-const PREP_GROUPS=[
-  {cat:'계약준비',color:'#f97583',tasks:['계약서서명','올인원동의서','사업자정보변경']},
-  {cat:'플랫폼세팅',color:'#3fb950',tasks:['플랜전환','CS챗봇세팅','안심취소활성화','상품리뉴얼']},
-  {cat:'마케팅준비',color:'#fbbf24',tasks:['기획전등록','검색광고세팅','타사채널해지']},
-];
-
-// ==================== OPERATIONS MATRIX ====================
+// ==================== OPERATIONS MATRIX (엑셀 진행 프로세스 A30:F56 기반) ====================
 function renderMatrix(el){
   const liveCamps=camps.filter(c=>['앱 라이브'].includes(c.status));
-  const prepCamps=camps.filter(c=>['계약 확정','계약 협의'].includes(c.status));
   const allActive=camps.filter(c=>!['보류','종결','MOU 체결'].includes(c.status));
 
   const campTaskMap={};
@@ -1050,141 +1075,202 @@ function renderMatrix(el){
     campTaskMap[pk].push(t);
   });
 
-  const targetCamps=matrixScope==='live'?liveCamps:matrixScope==='active'?allActive:camps;
   const matrixMd=document.getElementById('mx-md')?.value||'';
-  const matrixSort=document.getElementById('mx-sort')?.value||'status';
-  let filtered=[...targetCamps];
+  const matrixSort=document.getElementById('mx-sort')?.value||'name';
+
+  let filtered=[...liveCamps];
   if(matrixMd)filtered=filtered.filter(c=>c.md===matrixMd);
-  if(matrixSort==='name')filtered.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-  else if(matrixSort==='rate'){
-    filtered.sort((a,b)=>{
-      const ra=calcRate(a,campTaskMap),rb=calcRate(b,campTaskMap);
-      return rb-ra;
-    });
-  }else if(matrixSort==='md')filtered.sort((a,b)=>(a.md||'zzz').localeCompare(b.md||'zzz'));
+  if(matrixSort==='name')filtered.sort((a,b)=>(a.name||'').localeCompare(b.name||'','ko'));
+  else if(matrixSort==='rate')filtered.sort((a,b)=>calcRate(b,campTaskMap)-calcRate(a,campTaskMap));
+  else if(matrixSort==='md')filtered.sort((a,b)=>(a.md||'zzz').localeCompare(b.md||'zzz'));
 
   const mds=[...new Set(camps.map(c=>c.md).filter(Boolean))].sort();
+  const allTaskIds=OP_GROUPS.flatMap(g=>g.tasks.map(t=>t.id));
+  const totalItems=allTaskIds.length;
 
   let html=`
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
-    <div class="matrix-tabs" style="margin:0;display:flex;gap:6px">
-      <div class="matrix-tab ${matrixScope==='live'?'active':''}" onclick="matrixScope='live';render()">운영 중 (${liveCamps.length})</div>
-      <div class="matrix-tab ${matrixScope==='prep'?'active':''}" onclick="matrixScope='prep';render()">세팅 준비 (${prepCamps.length})</div>
-      <div class="matrix-tab ${matrixScope==='all'?'active':''}" onclick="matrixScope='all';render()">전체 (${liveCamps.length+prepCamps.length})</div>
-    </div>
-    <span style="color:var(--border);font-size:14px">|</span>
     <select id="mx-sort" onchange="render()" style="background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px">
-      <option value="status" ${matrixSort==='status'?'selected':''}>상태순</option>
+      <option value="name" ${matrixSort==='name'?'selected':''}>이름순</option>
       <option value="rate" ${matrixSort==='rate'?'selected':''}>완료율순</option>
       <option value="md" ${matrixSort==='md'?'selected':''}>MD순</option>
-      <option value="name" ${matrixSort==='name'?'selected':''}>이름순</option>
     </select>
+    <span style="font-size:11px;color:var(--muted)">운영 중 ${filtered.length}개소</span>
   </div>
-  <!-- 담당자(MD) 필터 버튼 -->
   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
     <span style="font-size:11px;color:var(--muted);font-weight:600;margin-right:4px">👤 담당자</span>
     <input type="hidden" id="mx-md" value="${matrixMd}">
     <div class="matrix-tab ${!matrixMd?'active':''}" onclick="document.getElementById('mx-md').value='';render()" style="font-size:11px;padding:4px 10px">전체</div>
     ${mds.map(m=>{
-      const mdCount=camps.filter(c=>c.md===m&&(matrixScope==='live'?c.status==='앱 라이브':matrixScope==='prep'?['계약 확정','계약 협의'].includes(c.status):!['보류','종결','MOU 체결'].includes(c.status))).length;
+      const mdCount=liveCamps.filter(c=>c.md===m).length;
+      if(!mdCount)return '';
       return `<div class="matrix-tab ${matrixMd===m?'active':''}" onclick="document.getElementById('mx-md').value='${m}';render()" style="font-size:11px;padding:4px 10px">${m} <span style="opacity:.6">(${mdCount})</span></div>`;
     }).join('')}
   </div>
   <div class="matrix-legend">
     <span><span class="signal sig-done" style="width:14px;height:14px;font-size:9px;line-height:14px">✅</span> 완료</span>
     <span><span class="signal sig-wip" style="width:14px;height:14px;font-size:9px;line-height:14px">🔄</span> 진행중</span>
-    <span><span class="signal sig-ext" style="width:14px;height:14px;font-size:9px;line-height:14px">⏳</span> 외부대기</span>
     <span><span class="signal sig-todo" style="width:14px;height:14px;font-size:9px;line-height:14px">⬜</span> 미시작</span>
-    <span><span class="signal sig-hold" style="width:14px;height:14px;font-size:9px;line-height:14px">⏸</span> 보류</span>
+    <span style="margin-left:8px;color:var(--muted)">|</span>
+    <span><span style="display:inline-block;width:14px;height:14px;background:#1e3a5f;border-radius:3px;font-size:8px;line-height:14px;text-align:center;color:var(--accent)">T</span> 내용기입 (클릭하여 입력)</span>
+    <span><span style="display:inline-block;width:14px;height:14px;background:#3b2f63;border-radius:3px;font-size:8px;line-height:14px;text-align:center;color:var(--purple)">P</span> 주기 운영</span>
   </div>`;
 
-  // Render helper: build a matrix table for given camps + task groups
-  function buildMatrix(targetCamps, taskGroups, taskTypeFilter){
-    if(!targetCamps.length) return '<div style="padding:20px;text-align:center;color:var(--muted)">해당 캠핑장이 없습니다.</div>';
+  // === Build Matrix ===
+  if(!filtered.length){
+    html+='<div style="padding:20px;text-align:center;color:var(--muted)">해당 캠핑장이 없습니다.</div>';
+  }else{
     let h='<div class="matrix-wrap"><table class="matrix"><thead><tr><th rowspan="2" style="min-width:130px;vertical-align:bottom">캠핑장</th>';
-    h+='<th rowspan="2" style="min-width:90px;vertical-align:bottom;font-size:11px;color:var(--accent)">플랜 적용일</th>';
-    taskGroups.forEach(g=>{
-      h+=`<th colspan="${g.tasks.length}" style="background:${g.color}22;color:${g.color};border-bottom:2px solid ${g.color};font-size:11px;letter-spacing:1px">${g.cat}</th>`;
+    h+='<th rowspan="2" style="min-width:85px;vertical-align:bottom;font-size:10px;color:var(--accent)">플랜적용일</th>';
+    OP_GROUPS.forEach(g=>{
+      h+=`<th colspan="${g.tasks.length}" style="background:${g.color}22;color:${g.color};border-bottom:2px solid ${g.color};font-size:10px;letter-spacing:.5px">${g.cat}</th>`;
     });
-    h+='<th rowspan="2" style="min-width:55px;vertical-align:bottom">완료율</th>';
-    h+='<th rowspan="2" style="min-width:120px;vertical-align:bottom;font-size:11px;color:var(--yellow)">메모</th>';
+    h+='<th rowspan="2" style="min-width:50px;vertical-align:bottom;font-size:10px">완료율</th>';
+    h+='<th rowspan="2" style="min-width:110px;vertical-align:bottom;font-size:10px;color:var(--yellow)">메모</th>';
     h+='</tr><tr>';
-    taskGroups.forEach(g=>{
+    OP_GROUPS.forEach(g=>{
       g.tasks.forEach((t,i)=>{
-        h+=`<th style="font-size:10px;padding:4px 3px;${i===0?'border-left:2px solid '+g.color+'33':''}">${t}</th>`;
+        const typeIcon=t.type==='input'?'📝':t.type==='periodic'?'🔄':'';
+        h+=`<th style="font-size:9px;padding:3px 2px;${i===0?'border-left:2px solid '+g.color+'33':''}" title="${t.label}${t.note?' — '+t.note:''}">${t.label}</th>`;
       });
     });
     h+='</tr></thead><tbody>';
-    targetCamps.forEach(c=>{
-      const pk=campKey(c);
-      const ct=(campTaskMap[c.PK]||[]).filter(t=>t.taskType===taskTypeFilter||(t.taskName||'').startsWith(taskTypeFilter==='standard'?'OP_':'PREP_'));
-      const done=ct.filter(t=>t.status==='완료').length;
-      const total=ct.length||taskGroups.flatMap(g=>g.tasks).length;
-      const rate=Math.round(done/total*100);
-      const barColor=rate>=80?'var(--green)':rate>=50?'var(--yellow)':'var(--red)';
-      // 플랜 적용일자
-      const planDate=c.planStartDate||'';
-      const planDisplay=planDate?new Date(planDate).toLocaleDateString('ko-KR',{year:'numeric',month:'short',day:'numeric'}):'';
-      // 메모 (첫 줄만 미리보기)
-      const memoRaw=(c.matrixMemo||c.notes||'').trim();
-      const memoPreview=memoRaw?memoRaw.split('\\n')[0].slice(0,40)+(memoRaw.length>40?'...':''):'';
-      const memoEscaped=memoRaw.replace(/'/g,"\\'").replace(/\n/g,'\\n');
 
-      h+=`<tr><td onclick="openDetail('${pk}')" style="cursor:pointer">${campSignal(c)} <b>${c.name||pk}</b><div style="font-size:9px;color:var(--muted);font-weight:400">${c.status}${c.md?' · '+c.md:''}</div></td>`;
-      // 플랜 적용일 셀
-      h+=`<td style="font-size:11px;color:${planDate?'var(--accent)':'#333'};white-space:nowrap">${planDisplay||'<span style="color:#333">—</span>'}</td>`;
-      taskGroups.forEach(g=>{
-        g.tasks.forEach((taskTitle,i)=>{
+    filtered.forEach(c=>{
+      const pk=campKey(c);
+      const ct=campTaskMap[c.PK]||[];
+      // 완료율 계산: check타입만 카운트
+      const checkIds=OP_GROUPS.flatMap(g=>g.tasks.filter(t=>t.type==='check').map(t=>t.id));
+      let doneCount=0;
+      checkIds.forEach(tid=>{
+        const match=ct.find(t=>(t.taskName||'')==='OP_'+tid||(t.taskName||'').includes(tid));
+        if(match&&match.status==='완료')doneCount++;
+      });
+      const rate=checkIds.length?Math.round(doneCount/checkIds.length*100):0;
+      const barColor=rate>=80?'var(--green)':rate>=50?'var(--yellow)':'var(--red)';
+      const planDate=c.planStartDate||'';
+      const planDisplay=planDate?new Date(planDate).toLocaleDateString('ko-KR',{month:'short',day:'numeric'}):'';
+      const memoRaw=(c.matrixMemo||'').trim();
+      const memoPreview=memoRaw?memoRaw.split('\n')[0].slice(0,30)+(memoRaw.length>30?'…':''):'';
+
+      h+=`<tr><td onclick="openDetail('${pk}')" style="cursor:pointer">${campSignal(c)} <b>${c.name||pk}</b><div style="font-size:9px;color:var(--muted);font-weight:400">${c.md||''}</div></td>`;
+      h+=`<td style="font-size:10px;color:${planDate?'var(--accent)':'#333'};white-space:nowrap">${planDisplay||'—'}</td>`;
+
+      OP_GROUPS.forEach(g=>{
+        g.tasks.forEach((taskDef,i)=>{
           const bl=i===0?`border-left:2px solid ${g.color}33;`:'';
-          const match=ct.find(t=>t.title===taskTitle||(t.taskName||'').includes(taskTitle));
-          if(match){
-            const st=SIG_MAP[match.status]||{cls:'sig-na',icon:'?'};
-            h+=`<td style="${bl}"><span class="signal ${st.cls}" title="${taskTitle}: ${match.status}" onclick="cycleStatus('${pk}','${match.taskName||match.SK?.replace('TASK#','')}')">${st.icon}</span></td>`;
-          }else{
-            const tPrefix=taskTypeFilter==='standard'?'OP_':'PREP_';
-            const tName=tPrefix+taskTitle.replace(/\s/g,'');
-            h+=`<td style="${bl}"><span class="signal sig-na" style="cursor:pointer" title="${taskTitle}: 클릭하여 과업 생성" onclick="createAndCycleTask('${pk}','${tName}','${taskTitle}')"">—</span></td>`;
+          const tName='OP_'+taskDef.id;
+          const match=ct.find(t=>(t.taskName||'')===tName||(t.taskName||'').includes(taskDef.id));
+
+          if(taskDef.type==='check'){
+            // 체크형: ✅/⬜ 토글
+            if(match){
+              const st=SIG_MAP[match.status]||{cls:'sig-na',icon:'?'};
+              h+=`<td style="${bl}"><span class="signal ${st.cls}" title="${taskDef.label}: ${match.status}" onclick="cycleStatus('${pk}','${match.taskName||tName}')" style="cursor:pointer">${st.icon}</span></td>`;
+            }else{
+              h+=`<td style="${bl}"><span class="signal sig-na" style="cursor:pointer" title="${taskDef.label}: 클릭하여 생성" onclick="createAndCycleTask('${pk}','${tName}','${taskDef.label}')">⬜</span></td>`;
+            }
+          }else if(taskDef.type==='input'){
+            // 내용기입형: 클릭하면 인라인 편집
+            const memo=match?.memo||'';
+            const status=match?.status||'미시작';
+            const isDone=status==='완료';
+            const cellBg=isDone?'#064e3b44':memo?'#1e3a5f33':'';
+            const preview=memo?memo.slice(0,8)+(memo.length>8?'…':''):'';
+            h+=`<td style="${bl}background:${cellBg};cursor:pointer;position:relative" class="mx-memo-cell" onclick="openTaskInput(this,'${pk}','${tName}','${taskDef.label}')" title="${memo||taskDef.label+': 클릭하여 입력'}">
+              <div style="font-size:9px;color:${memo?'var(--text)':'#444'};text-align:center">${isDone?'✅ ':''}${preview||'—'}</div>
+            </td>`;
+          }else if(taskDef.type==='periodic'){
+            // 주기형: 마지막 실행일 표시
+            const lastDone=match?.memo||'';
+            const status=match?.status||'미시작';
+            const isDone=status==='완료';
+            h+=`<td style="${bl}cursor:pointer;position:relative" class="mx-memo-cell" onclick="openTaskInput(this,'${pk}','${tName}','${taskDef.label}')" title="${taskDef.note||''}: ${lastDone||'미진행'}">
+              <div style="font-size:9px;color:${lastDone?'var(--purple)':'#444'};text-align:center">${lastDone||'—'}</div>
+            </td>`;
           }
         });
       });
-      h+=`<td><div style="font-size:12px;font-weight:700;color:${barColor}">${rate}%</div><div class="progress-bar"><div class="progress-fill" style="width:${rate}%;background:${barColor}"></div></div></td>`;
-      // 메모 셀
+
+      h+=`<td><div style="font-size:11px;font-weight:700;color:${barColor}">${rate}%</div><div class="progress-bar"><div class="progress-fill" style="width:${rate}%;background:${barColor}"></div></div></td>`;
       h+=`<td class="mx-memo-cell" style="text-align:left">
         <div class="mx-memo-text ${memoRaw?'':'empty'}" onclick="openMatrixMemo(this,'${pk}')" title="${memoRaw?memoRaw.replace(/"/g,'&quot;'):'클릭하여 메모 추가'}">${memoPreview||'+ 메모'}</div>
       </td>`;
       h+=`</tr>`;
     });
     h+='</tbody></table></div>';
-    return h;
-  }
-
-  if(matrixScope==='live'||matrixScope==='all'){
-    // 운영 중 (앱 라이브)
-    let liveFiltered=[...liveCamps];
-    if(matrixMd)liveFiltered=liveFiltered.filter(c=>c.md===matrixMd);
-    if(matrixSort==='rate')liveFiltered.sort((a,b)=>calcRate(b,campTaskMap,'standard')-calcRate(a,campTaskMap,'standard'));
-    html+=`<div style="font-size:14px;font-weight:700;color:var(--green);margin:12px 0 8px;padding:8px 12px;background:#064e3b22;border-left:3px solid var(--green);border-radius:4px">🟢 운영 중 (${liveFiltered.length}개소)</div>`;
-    html+=buildMatrix(liveFiltered,OP_GROUPS,'standard');
-  }
-
-  if(matrixScope==='prep'||matrixScope==='all'){
-    // 세팅 준비 (계약 확정 + 협의)
-    let prepFiltered=[...prepCamps];
-    if(matrixMd)prepFiltered=prepFiltered.filter(c=>c.md===matrixMd);
-    if(matrixSort==='rate')prepFiltered.sort((a,b)=>calcRate(b,campTaskMap,'prep')-calcRate(a,campTaskMap,'prep'));
-    html+=`<div style="font-size:14px;font-weight:700;color:var(--accent);margin:20px 0 8px;padding:8px 12px;background:#1e3a5f33;border-left:3px solid var(--accent);border-radius:4px">🔵 세팅 준비 중 — 계약 확정·협의 (${prepFiltered.length}개소)</div>`;
-    html+=buildMatrix(prepFiltered,PREP_GROUPS,'prep');
+    html+=h;
   }
 
   el.innerHTML=html;
 }
 
-function calcRate(camp,campTaskMap,type='standard'){
+// 내용기입/주기 과업 인라인 편집
+function openTaskInput(cell,campId,taskName,label){
+  document.querySelectorAll('.mx-memo-edit').forEach(e=>e.remove());
+  const ct=tasks.find(t=>(t.PK===`CAMP#${campId}`)&&((t.taskName||'')===taskName));
+  const curMemo=ct?.memo||'';
+  const curStatus=ct?.status||'미시작';
+
+  const editor=document.createElement('div');
+  editor.className='mx-memo-edit';
+  editor.style.width='220px';
+  editor.innerHTML=`
+    <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:6px">${label}</div>
+    <textarea id="mx-task-ta" style="width:100%;background:#0d1117;color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px;font-size:11px;font-family:inherit;min-height:50px">${curMemo}</textarea>
+    <div style="display:flex;gap:4px;margin-top:6px;align-items:center">
+      <select id="mx-task-status" style="background:#0d1117;color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:10px;flex:1">
+        <option value="미시작" ${curStatus==='미시작'?'selected':''}>⬜ 미시작</option>
+        <option value="진행중" ${curStatus==='진행중'?'selected':''}>🔄 진행중</option>
+        <option value="완료" ${curStatus==='완료'?'selected':''}>✅ 완료</option>
+      </select>
+      <button onclick="this.closest('.mx-memo-edit').remove()" style="font-size:10px;padding:3px 8px;border-radius:4px;cursor:pointer;border:1px solid var(--border);background:var(--card);color:var(--muted)">취소</button>
+      <button onclick="saveTaskInput('${campId}','${taskName}','${label}')" style="font-size:10px;padding:3px 8px;border-radius:4px;cursor:pointer;border:1px solid var(--accent);background:var(--accent);color:#000;font-weight:700">저장</button>
+    </div>
+  `;
+  cell.appendChild(editor);
+  editor.querySelector('textarea').focus();
+  event.stopPropagation();
+}
+
+async function saveTaskInput(campId,taskName,label){
+  const memo=document.getElementById('mx-task-ta')?.value||'';
+  const status=document.getElementById('mx-task-status')?.value||'미시작';
+  const existing=tasks.find(t=>(t.PK===`CAMP#${campId}`)&&((t.taskName||'')===taskName));
+
+  try{
+    if(existing){
+      // 업데이트
+      const res=await fetch(`${API}/api/tasks/${encodeURIComponent(campId)}/${encodeURIComponent(taskName)}`,{
+        method:'PUT',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({status,memo})
+      });
+      const json=await res.json();
+      if(json.success){showToast(`${label} 저장 완료`);document.querySelectorAll('.mx-memo-edit').forEach(e=>e.remove());await loadAll()}
+      else showToast(json.error||'실패','var(--red)');
+    }else{
+      // 신규 생성
+      const catMatch=OP_GROUPS.find(g=>g.tasks.some(t=>t.id===taskName.replace('OP_','')));
+      const res=await fetch(`${API}/api/tasks`,{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({PK:`CAMP#${campId}`,SK:`TASK#${taskName}`,taskName,title:label,status,memo,taskType:'standard',category:catMatch?.cat||'',campCode:campId,pin:'1234'})
+      });
+      const json=await res.json();
+      if(json.success){showToast(`${label} 생성 및 저장 완료`);document.querySelectorAll('.mx-memo-edit').forEach(e=>e.remove());await loadAll()}
+      else showToast(json.error||'실패','var(--red)');
+    }
+  }catch(e){showToast('오류: '+e.message,'var(--red)')}
+}
+
+function calcRate(camp,campTaskMap){
   const ct=campTaskMap[camp.PK]||[];
-  const prefix=type==='standard'?'OP_':'PREP_';
-  const op=ct.filter(t=>t.taskType===type||(t.taskName||'').startsWith(prefix));
-  const done=op.filter(t=>t.status==='완료').length;
-  return op.length?Math.round(done/op.length*100):0;
+  const checkIds=OP_GROUPS.flatMap(g=>g.tasks.filter(t=>t.type==='check').map(t=>t.id));
+  let done=0;
+  checkIds.forEach(tid=>{
+    const match=ct.find(t=>(t.taskName||'')==='OP_'+tid||(t.taskName||'').includes(tid));
+    if(match&&match.status==='완료')done++;
+  });
+  return checkIds.length?Math.round(done/checkIds.length*100):0;
 }
 
 async function cycleStatus(campId,taskName){
@@ -2045,17 +2131,11 @@ function loadReplyProfiles(data){
 
 // ==================== CREATE TASK FROM MATRIX ====================
 async function createAndCycleTask(campId,taskName,title){
-  // 카테고리 자동 매핑
-  const catMap={'계약서':'계약관리','부속합의서1호':'계약관리','공급가확정':'계약관리','부속합의서2호':'계약관리',
-    '캠핏등록':'캠핏세팅','CS챗봇':'캠핏세팅','안심취소':'캠핏세팅','얼리체크인':'캠핏세팅',
-    '기획전':'콘텐츠','사진촬영':'콘텐츠','상세페이지':'콘텐츠','B2B상품':'콘텐츠','체험프로그램':'콘텐츠',
-    '검색광고':'마케팅','네이버연동':'마케팅','슈퍼팬모집':'마케팅','리뷰관리':'마케팅',
-    '캠프닉':'운영','이지캠핑':'운영','월간리포트':'운영',
-    '계약서서명':'계약준비','올인원동의서':'계약준비','사업자정보변경':'계약준비',
-    '플랜전환':'플랫폼세팅','CS챗봇세팅':'플랫폼세팅','안심취소활성화':'플랫폼세팅','상품리뉴얼':'플랫폼세팅',
-    '기획전등록':'마케팅준비','검색광고세팅':'마케팅준비','타사채널해지':'마케팅준비'};
-  const taskType=taskName.startsWith('OP_')?'standard':'prep';
-  const category=catMap[title]||'';
+  // OP_GROUPS에서 카테고리 자동 매핑
+  const taskId=taskName.replace('OP_','').replace('PREP_','');
+  const catMatch=OP_GROUPS.find(g=>g.tasks.some(t=>t.id===taskId));
+  const category=catMatch?.cat||'';
+  const taskType='standard';
   try{
     const res=await fetch(`${API}/api/tasks`,{
       method:'POST',headers:{'Content-Type':'application/json'},
