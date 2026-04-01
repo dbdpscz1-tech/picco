@@ -193,6 +193,28 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .mx-memo-edit .mx-memo-btns{display:flex;gap:4px;margin-top:4px;justify-content:flex-end}
 .mx-memo-edit .mx-memo-btns button{font-size:10px;padding:3px 8px;border-radius:4px;cursor:pointer;border:1px solid var(--border)}
 
+/* Review Reply */
+.rv-container{display:grid;grid-template-columns:1fr 1fr;gap:16px;height:calc(100vh - 140px)}
+.rv-left,.rv-right{display:flex;flex-direction:column;gap:12px;overflow-y:auto}
+.rv-panel{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px}
+.rv-panel h4{font-size:13px;font-weight:700;color:#fff;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.rv-textarea{width:100%;background:#0d1117;color:var(--text);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:13px;font-family:inherit;resize:vertical;line-height:1.6}
+.rv-textarea:focus{outline:none;border-color:var(--accent)}
+.rv-output{background:#0d1117;border:1px solid var(--border);border-radius:8px;padding:14px;font-size:13px;color:var(--text);line-height:1.8;white-space:pre-wrap;min-height:120px}
+.rv-tag{display:inline-block;font-size:10px;padding:2px 8px;border-radius:4px;font-weight:600;margin-right:4px;margin-bottom:4px}
+.rv-sample{background:#0d1117;border-left:3px solid var(--border);border-radius:4px;padding:8px 12px;margin-bottom:6px;font-size:11px;color:var(--muted);line-height:1.6;cursor:pointer;transition:.15s}
+.rv-sample:hover{border-left-color:var(--accent);color:var(--text)}
+.rv-btn{background:var(--accent);color:#000;border:none;border-radius:8px;padding:10px 20px;font-weight:700;cursor:pointer;font-size:13px;transition:.15s}
+.rv-btn:hover{opacity:.9}
+.rv-btn:disabled{opacity:.4;cursor:not-allowed}
+.rv-btn-copy{background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:12px;cursor:pointer}
+.rv-btn-copy:hover{border-color:var(--accent)}
+.rv-stat{display:flex;gap:8px;flex-wrap:wrap}
+.rv-stat-item{background:#0d1117;border:1px solid var(--border);border-radius:6px;padding:8px 12px;text-align:center;min-width:80px}
+.rv-stat-item .num{font-size:18px;font-weight:800;color:#fff}
+.rv-stat-item .lbl{font-size:10px;color:var(--muted);margin-top:2px}
+@media(max-width:900px){.rv-container{grid-template-columns:1fr}}
+
 /* Toast */
 .toast{position:fixed;bottom:20px;right:20px;background:var(--green);color:#000;padding:10px 16px;border-radius:8px;font-size:13px;font-weight:600;display:none;z-index:200}
 
@@ -215,7 +237,8 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
   <div class="nav-item" onclick="navigate('camps')"><span class="icon">🏕️</span><span class="nav-text">캠핑장 현황</span></div>
   <div class="nav-item" onclick="navigate('logs')"><span class="icon">📋</span><span class="nav-text">활동 로그</span></div>
   <div class="nav-item" onclick="navigate('chat')"><span class="icon">💬</span><span class="nav-text">챗봇</span></div>
-  <div class="sidebar-footer">v18b | API 연동</div>
+  <div class="nav-item" onclick="navigate('review')"><span class="icon">✍️</span><span class="nav-text">리뷰 답변</span></div>
+  <div class="sidebar-footer">v19 | API 연동</div>
 </div>
 
 <div class="main">
@@ -495,9 +518,9 @@ async function loadAll(){
 function navigate(view){
   currentView=view;
   document.querySelectorAll('.nav-item').forEach(el=>el.classList.remove('active'));
-  const idx=['dashboard','pipeline','calendar','matrix','camps','logs','chat'].indexOf(view);
+  const idx=['dashboard','pipeline','calendar','matrix','camps','logs','chat','review'].indexOf(view);
   document.querySelectorAll('.nav-item')[idx].classList.add('active');
-  const titles={dashboard:'대시보드',pipeline:'파이프라인 보드',calendar:'미팅 캘린더',matrix:'운영 현황판',camps:'캠핑장 현황',logs:'활동 로그',chat:'AI 챗봇'};
+  const titles={dashboard:'대시보드',pipeline:'파이프라인 보드',calendar:'미팅 캘린더',matrix:'운영 현황판',camps:'캠핑장 현황',logs:'활동 로그',chat:'AI 챗봇',review:'리뷰 답변 생성'};
   document.getElementById('pageTitle').textContent=titles[view];
   closeDetail();
   render();
@@ -512,6 +535,7 @@ function render(){
   else if(currentView==='camps')renderCamps(el);
   else if(currentView==='logs')renderLogs(el);
   else if(currentView==='chat')renderChat(el);
+  else if(currentView==='review')renderReview(el);
 }
 
 // ==================== DASHBOARD ====================
@@ -1717,6 +1741,306 @@ async function saveNewCamp(e){
   }catch(err){
     showToast('API 오류: '+err.message,'var(--red)');
   }
+}
+
+// ==================== REVIEW REPLY ====================
+
+// 캠핑장별 스타일 프로필 저장소 (데이터 로드 후 채워짐)
+const CAMP_REPLY_PROFILES={};
+
+// 기본 친절 템플릿 (데이터 부족 시 사용)
+const DEFAULT_STYLE={
+  tone:'친절하고 따뜻한',
+  greeting:'안녕하세요, {campName}입니다 :)',
+  closing:'다음에도 좋은 추억 만들어 가시길 바랍니다. 감사합니다!',
+  traits:['존댓말 사용','이모티콘 적절 사용','감사 인사 포함','재방문 유도'],
+  avgLength:150,
+  samples:[]
+};
+
+// 스타일 분석 함수: 캠핑장의 기존 댓글들에서 패턴 추출
+function analyzeStyle(replies){
+  if(!replies||!replies.length)return null;
+  const profile={samples:replies.slice(0,10),avgLength:0,traits:[],tone:'',greeting:'',closing:'',
+    keywords:[],emojiUse:false,honorific:true,exclamation:0,questionMark:0};
+
+  let totalLen=0,emojiCount=0,honorCount=0,excCount=0,qCount=0;
+  const wordFreq={};
+
+  replies.forEach(r=>{
+    const text=r.reply||r.text||r;
+    totalLen+=text.length;
+    if(/[😀-🙏🌀-🗿🚀-🛿☀-⭕✂-➰🀄-🃏🅰-🆎]/u.test(text)||/[:;][)D(P]/g.test(text)||/ㅎㅎ|ㅋㅋ|😊|🙏|💚|🌿|🏕|⛺/g.test(text))emojiCount++;
+    if(/습니다|세요|드립니다|감사합니다|바랍니다/g.test(text))honorCount++;
+    excCount+=(text.match(/!/g)||[]).length;
+    qCount+=(text.match(/\?/g)||[]).length;
+
+    // 첫 문장(인사) 패턴
+    const firstLine=text.split(/[.!?\n]/)[0];
+    if(/안녕하세요|반갑습니다|감사합니다|소중한|방문해/i.test(firstLine))profile.greeting=firstLine.trim();
+
+    // 마지막 문장(마무리) 패턴
+    const sentences=text.split(/[.!?\n]/).filter(s=>s.trim());
+    if(sentences.length>1){
+      const last=sentences[sentences.length-1].trim();
+      if(/감사|기다리|바랍니다|뵙겠|오세요|방문|재방문|추억/i.test(last))profile.closing=last;
+    }
+
+    // 키워드 빈도
+    text.replace(/[^가-힣a-zA-Z\s]/g,'').split(/\s+/).filter(w=>w.length>1).forEach(w=>{wordFreq[w]=(wordFreq[w]||0)+1});
+  });
+
+  profile.avgLength=Math.round(totalLen/replies.length);
+  profile.emojiUse=emojiCount>replies.length*0.3;
+  profile.honorific=honorCount>replies.length*0.5;
+  profile.exclamation=Math.round(excCount/replies.length*10)/10;
+
+  // 톤 판단
+  if(profile.emojiUse&&profile.exclamation>1)profile.tone='활기차고 친근한';
+  else if(profile.honorific&&profile.avgLength>100)profile.tone='정중하고 격식 있는';
+  else if(profile.avgLength<80)profile.tone='간결하고 심플한';
+  else profile.tone='따뜻하고 친절한';
+
+  // 특성 태그
+  if(profile.honorific)profile.traits.push('존댓말');
+  if(profile.emojiUse)profile.traits.push('이모티콘 활용');
+  if(profile.avgLength>120)profile.traits.push('상세한 답변');
+  if(profile.avgLength<=80)profile.traits.push('간결한 답변');
+  if(profile.exclamation>1.5)profile.traits.push('느낌표 많이 사용');
+  if(/감사/g.test(replies.join(' ')))profile.traits.push('감사 표현');
+  if(/또|다시|재방문|다음/g.test(replies.join(' ')))profile.traits.push('재방문 유도');
+
+  // 자주 쓰는 키워드 (상위 10개)
+  profile.keywords=Object.entries(wordFreq).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([w])=>w);
+
+  return profile;
+}
+
+// 리뷰에서 키 토픽 추출
+function extractTopics(review){
+  const topics=[];
+  if(/깨끗|청결|청소|위생/i.test(review))topics.push('청결');
+  if(/친절|사장님|캠지기|주인/i.test(review))topics.push('친절');
+  if(/경치|뷰|풍경|자연|계곡|산|호수|바다/i.test(review))topics.push('자연환경');
+  if(/시설|화장실|샤워|매점|편의/i.test(review))topics.push('시설');
+  if(/아이|아기|가족|아이들|아들|딸/i.test(review))topics.push('가족/아이');
+  if(/조용|힐링|휴식|평화/i.test(review))topics.push('힐링');
+  if(/음식|식사|고기|바베큐|BBQ|삼겹/i.test(review))topics.push('식사');
+  if(/별|밤하늘|야경|불멍/i.test(review))topics.push('불멍/야경');
+  if(/넓|사이트|간격|프라이빗|독립/i.test(review))topics.push('사이트 공간');
+  if(/재방문|또|다시/i.test(review))topics.push('재방문의사');
+  if(/아쉬|불편|별로|부족/i.test(review))topics.push('아쉬운점');
+  return topics;
+}
+
+// 답변 생성 (로컬 템플릿 기반)
+function generateReply(campName,review,profile){
+  const p=profile||DEFAULT_STYLE;
+  const topics=extractTopics(review);
+  const isNeg=topics.includes('아쉬운점');
+
+  // 인사
+  let greeting=p.greeting||DEFAULT_STYLE.greeting;
+  greeting=greeting.replace('{campName}',campName);
+  if(!greeting.includes(campName)&&!greeting.match(/저희|우리/))greeting=`안녕하세요, ${campName}입니다${p.emojiUse?' :)':'.'} `;
+
+  // 감사
+  let thanks=`소중한 후기 남겨주셔서 정말 감사합니다${p.exclamation>1?'!':'.'}`;
+
+  // 본문 (토픽별 반응)
+  const topicResponses={
+    '청결':`청결하게 느끼셨다니 저희 관리팀이 보람을 느낍니다${p.emojiUse?' 😊':''}`,
+    '친절':'따뜻한 말씀에 저희 직원들도 큰 힘이 됩니다.',
+    '자연환경':`저희 캠핑장의 자연환경을 좋아해 주셔서 기쁩니다${p.emojiUse?' 🌿':''}`,
+    '시설':'시설 관련 만족해 주셔서 감사합니다. 더 나은 환경을 위해 계속 노력하겠습니다.',
+    '가족/아이':`가족분들과 함께 즐거운 시간 보내셨다니 정말 뿌듯합니다${p.emojiUse?' 👨‍👩‍👧‍👦':''}`,
+    '힐링':'편안한 힐링 시간을 보내셨다니 다행입니다.',
+    '식사':'맛있는 식사까지 즐기셨다니 좋은 추억이 되셨길 바랍니다.',
+    '불멍/야경':`불멍과 함께한 밤이 특별한 추억이 되셨길 바랍니다${p.emojiUse?' 🔥':''}`,
+    '사이트 공간':'넓은 사이트에서 쾌적하게 이용해 주셨다니 기쁩니다.',
+    '재방문의사':`다음에도 찾아주신다니 정말 감사하고 기대가 됩니다${p.exclamation>1?'!':'.'}`,
+    '아쉬운점':'말씀해 주신 아쉬운 부분은 저희가 꼭 개선하도록 하겠습니다. 소중한 의견 감사합니다.',
+  };
+
+  let body='';
+  const posTopics=topics.filter(t=>t!=='아쉬운점');
+  if(posTopics.length){
+    body=posTopics.slice(0,3).map(t=>topicResponses[t]||'').filter(Boolean).join(' ');
+  }
+  if(isNeg){
+    body+=(body?' ':'')+topicResponses['아쉬운점'];
+  }
+  if(!body)body=`즐거운 시간 보내셨다니 정말 기쁩니다${p.emojiUse?' 😊':'.'}`;
+
+  // 마무리
+  let closing=p.closing||DEFAULT_STYLE.closing;
+  if(!closing)closing=`다음에도 좋은 추억 만들어 가시길 바랍니다. 감사합니다${p.emojiUse?' 🙏':'!'}`;
+
+  // 조합
+  let reply=`${greeting}\n${thanks}\n${body}\n${closing}`;
+
+  // 길이 조절 (프로필 평균 길이에 맞춤)
+  const targetLen=p.avgLength||150;
+  if(reply.length>targetLen*1.5&&targetLen<120){
+    // 간결 스타일이면 줄이기
+    reply=`${greeting} ${thanks} ${body.split('.')[0]}. ${closing}`;
+  }
+
+  return reply;
+}
+
+let reviewCampId='';
+
+function renderReview(el){
+  const liveCamps=camps.filter(c=>['앱 라이브','계약 확정','계약 협의','MOU 체결'].includes(c.status));
+  const selectedCamp=reviewCampId?camps.find(c=>campKey(c)===reviewCampId):null;
+  const profile=reviewCampId?CAMP_REPLY_PROFILES[reviewCampId]:null;
+  const hasData=profile&&profile.samples&&profile.samples.length>0;
+
+  let html=`
+  <div class="rv-container">
+    <!-- 왼쪽: 입력 -->
+    <div class="rv-left">
+      <div class="rv-panel">
+        <h4>🏕️ 캠핑장 선택</h4>
+        <select id="rv-camp" onchange="reviewCampId=this.value;render()" style="width:100%;background:#0d1117;color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:13px">
+          <option value="">캠핑장을 선택하세요</option>
+          ${liveCamps.sort((a,b)=>(a.name||'').localeCompare(b.name||'','ko')).map(c=>{
+            const pk=campKey(c);
+            const p=CAMP_REPLY_PROFILES[pk];
+            const cnt=p?p.samples.length:0;
+            return `<option value="${pk}" ${reviewCampId===pk?'selected':''}>${c.name}${cnt?' ('+cnt+'건)':''}</option>`;
+          }).join('')}
+        </select>
+      </div>
+
+      <!-- 스타일 프로필 -->
+      <div class="rv-panel">
+        <h4>📊 캠지기 스타일 프로필</h4>
+        ${hasData?`
+          <div class="rv-stat" style="margin-bottom:10px">
+            <div class="rv-stat-item"><div class="num">${profile.samples.length}</div><div class="lbl">학습 댓글</div></div>
+            <div class="rv-stat-item"><div class="num">${profile.avgLength}</div><div class="lbl">평균 글자수</div></div>
+            <div class="rv-stat-item"><div class="num" style="font-size:14px">${profile.tone}</div><div class="lbl">말투</div></div>
+          </div>
+          <div style="margin-bottom:8px">
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px">특성 태그</div>
+            ${profile.traits.map(t=>`<span class="rv-tag" style="background:#1e3a5f;color:var(--accent)">${t}</span>`).join('')}
+          </div>
+          <div style="margin-bottom:8px">
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px">자주 쓰는 표현</div>
+            ${profile.keywords.map(k=>`<span class="rv-tag" style="background:#064e3b;color:var(--green)">${k}</span>`).join('')}
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px">인사 패턴</div>
+            <div style="font-size:12px;color:var(--text)">"${profile.greeting||'-'}"</div>
+          </div>
+          <div style="margin-top:6px">
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px">마무리 패턴</div>
+            <div style="font-size:12px;color:var(--text)">"${profile.closing||'-'}"</div>
+          </div>
+        `:`
+          <div style="padding:16px;text-align:center;color:var(--muted);font-size:12px;line-height:1.8">
+            ${reviewCampId?'<div style="font-size:24px;margin-bottom:8px">📭</div>이 캠핑장의 댓글 데이터가 아직 없습니다.<br><b style="color:var(--accent)">기본 친절 템플릿</b>으로 답변을 생성합니다.':'캠핑장을 선택하면 스타일 프로필이 표시됩니다.'}
+          </div>
+        `}
+      </div>
+
+      <!-- 샘플 댓글 -->
+      ${hasData?`
+      <div class="rv-panel" style="flex:1;overflow-y:auto">
+        <h4>💬 기존 댓글 샘플 <span style="font-weight:400;color:var(--muted);font-size:11px">(최근 ${Math.min(profile.samples.length,5)}건)</span></h4>
+        ${profile.samples.slice(0,5).map(s=>{
+          const text=typeof s==='string'?s:(s.reply||s.text||'');
+          return `<div class="rv-sample">${text.length>200?text.slice(0,200)+'...':text}</div>`;
+        }).join('')}
+      </div>`:''}
+    </div>
+
+    <!-- 오른쪽: 리뷰 입력 & 생성 -->
+    <div class="rv-right">
+      <div class="rv-panel">
+        <h4>📝 고객 리뷰 입력</h4>
+        <textarea id="rv-review" class="rv-textarea" rows="6" placeholder="고객이 남긴 리뷰를 붙여넣기 하세요...&#10;&#10;예: 아이들과 함께 갔는데 시설도 깨끗하고 사장님도 친절하셔서 너무 좋았어요! 계곡이 바로 앞이라 물놀이하기 좋았습니다. 다음에 꼭 또 갈게요~"></textarea>
+        <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
+          <button class="rv-btn" onclick="handleGenerateReply()" id="rv-gen-btn" ${!reviewCampId?'disabled':''}>✍️ 답변 생성</button>
+          <select id="rv-tone-override" style="background:#0d1117;color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px">
+            <option value="">캠지기 스타일 유지</option>
+            <option value="formal">격식체로 변환</option>
+            <option value="casual">친근체로 변환</option>
+            <option value="short">간결하게</option>
+            <option value="detailed">상세하게</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="rv-panel" style="flex:1">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <h4 style="margin:0">💌 생성된 답변</h4>
+          <div style="display:flex;gap:6px">
+            <button class="rv-btn-copy" onclick="copyReply()">📋 복사</button>
+            <button class="rv-btn-copy" onclick="handleGenerateReply()">🔄 재생성</button>
+          </div>
+        </div>
+        <div id="rv-output" class="rv-output" style="min-height:200px">
+          <span style="color:var(--muted)">캠핑장을 선택하고 고객 리뷰를 입력한 후 [답변 생성] 버튼을 눌러주세요.</span>
+        </div>
+        <div id="rv-topics" style="margin-top:10px"></div>
+      </div>
+    </div>
+  </div>`;
+
+  el.innerHTML=html;
+}
+
+function handleGenerateReply(){
+  const review=document.getElementById('rv-review')?.value?.trim();
+  if(!review){showToast('고객 리뷰를 입력해주세요','var(--red)');return}
+  if(!reviewCampId){showToast('캠핑장을 선택해주세요','var(--red)');return}
+
+  const camp=camps.find(c=>campKey(c)===reviewCampId);
+  const campName=camp?.name||reviewCampId;
+  const profile=CAMP_REPLY_PROFILES[reviewCampId]||null;
+  const toneOverride=document.getElementById('rv-tone-override')?.value;
+
+  // 토픽 추출
+  const topics=extractTopics(review);
+
+  // 답변 생성
+  let reply=generateReply(campName,review,profile);
+
+  // 톤 오버라이드
+  if(toneOverride==='formal'){
+    reply=reply.replace(/ㅎㅎ|ㅋㅋ/g,'').replace(/😊|🙏|💚|🌿|🏕|⛺|🔥|👨‍👩‍👧‍👦/g,'').replace(/:[\)D]/g,'');
+  }else if(toneOverride==='short'){
+    const sentences=reply.split(/[.\n]/).filter(s=>s.trim());
+    reply=sentences.slice(0,3).join('. ')+'.';
+  }
+
+  // 출력
+  document.getElementById('rv-output').textContent=reply;
+  document.getElementById('rv-topics').innerHTML=topics.length?
+    `<div style="font-size:11px;color:var(--muted);margin-bottom:4px">감지된 토픽</div>${topics.map(t=>`<span class="rv-tag" style="background:#3b2f63;color:var(--purple)">${t}</span>`).join('')}`:'';
+}
+
+function copyReply(){
+  const text=document.getElementById('rv-output')?.textContent;
+  if(!text||text.includes('버튼을 눌러주세요')){showToast('복사할 답변이 없습니다','var(--red)');return}
+  navigator.clipboard.writeText(text).then(()=>showToast('답변이 복사되었습니다!')).catch(()=>{
+    const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);showToast('답변이 복사되었습니다!');
+  });
+}
+
+// 캠핑장 댓글 데이터 로드 (나중에 파일/API에서 채움)
+function loadReplyProfiles(data){
+  // data = { "캠핑장명": [ {reply:"댓글내용", review:"원래리뷰"}, ... ], ... }
+  Object.entries(data).forEach(([campName,replies])=>{
+    // 캠핑장명으로 매칭
+    const camp=camps.find(c=>(c.name||'').includes(campName)||campKey(c).includes(campName));
+    const pk=camp?campKey(camp):campName;
+    const profile=analyzeStyle(replies);
+    if(profile)CAMP_REPLY_PROFILES[pk]=profile;
+  });
 }
 
 // ==================== CREATE TASK FROM MATRIX ====================
