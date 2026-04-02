@@ -1063,17 +1063,13 @@ function renderPipeline(el){
   el.innerHTML=html;
 }
 
-// ==================== OPERATIONS MATRIX (엑셀 진행 프로세스 A30:F56 기반) ====================
+// ==================== OPERATIONS MATRIX (카드형 UI) ====================
+let expandedCamp=null; // 현재 펼친 캠핑장
+
 function renderMatrix(el){
   const liveCamps=camps.filter(c=>['앱 라이브'].includes(c.status));
-  const allActive=camps.filter(c=>!['보류','종결','MOU 체결'].includes(c.status));
-
   const campTaskMap={};
-  tasks.forEach(t=>{
-    const pk=t.PK||'';
-    if(!campTaskMap[pk])campTaskMap[pk]=[];
-    campTaskMap[pk].push(t);
-  });
+  tasks.forEach(t=>{const pk=t.PK||'';if(!campTaskMap[pk])campTaskMap[pk]=[];campTaskMap[pk].push(t)});
 
   const matrixMd=document.getElementById('mx-md')?.value||'';
   const matrixSort=document.getElementById('mx-sort')?.value||'name';
@@ -1084,124 +1080,167 @@ function renderMatrix(el){
   else if(matrixSort==='rate')filtered.sort((a,b)=>calcRate(b,campTaskMap)-calcRate(a,campTaskMap));
   else if(matrixSort==='md')filtered.sort((a,b)=>(a.md||'zzz').localeCompare(b.md||'zzz'));
 
-  const mds=[...new Set(camps.map(c=>c.md).filter(Boolean))].sort();
-  const allTaskIds=OP_GROUPS.flatMap(g=>g.tasks.map(t=>t.id));
-  const totalItems=allTaskIds.length;
+  const mds=[...new Set(liveCamps.map(c=>c.md).filter(Boolean))].sort();
+
+  // 전체 통계
+  const totalCheck=OP_GROUPS.flatMap(g=>g.tasks.filter(t=>t.type==='check')).length;
+  let totalDone=0,totalAll=0;
+  filtered.forEach(c=>{const r=calcRate(c,campTaskMap);totalDone+=Math.round(r*totalCheck/100);totalAll+=totalCheck});
+  const overallRate=totalAll?Math.round(totalDone/totalAll*100):0;
 
   let html=`
-  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
-    <select id="mx-sort" onchange="render()" style="background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px">
+  <!-- 상단 요약 -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
+      <div style="font-size:28px;font-weight:900;color:var(--green)">${filtered.length}</div>
+      <div style="font-size:11px;color:var(--muted)">운영 중</div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
+      <div style="font-size:28px;font-weight:900;color:${overallRate>=60?'var(--green)':overallRate>=30?'var(--yellow)':'var(--red)'}">${overallRate}%</div>
+      <div style="font-size:11px;color:var(--muted)">전체 세팅 완료율</div>
+    </div>
+    ${mds.map(m=>{
+      const mc=filtered.filter(c=>c.md===m);
+      if(!mc.length)return '';
+      const mr=mc.length?Math.round(mc.reduce((s,c)=>s+calcRate(c,campTaskMap),0)/mc.length):0;
+      return `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center;cursor:pointer;${matrixMd===m?'border-color:var(--accent)':''}" onclick="document.getElementById('mx-md').value='${matrixMd===m?'':m}';render()">
+        <div style="font-size:20px;font-weight:800;color:var(--accent)">${mc.length}<span style="font-size:12px;color:var(--muted);font-weight:400;margin-left:4px">${mr}%</span></div>
+        <div style="font-size:11px;color:${matrixMd===m?'var(--accent)':'var(--muted)'}">${m}</div>
+      </div>`;
+    }).join('')}
+  </div>
+
+  <!-- 필터/정렬 -->
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+    <input type="hidden" id="mx-md" value="${matrixMd}">
+    <select id="mx-sort" onchange="render()" style="background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:11px">
       <option value="name" ${matrixSort==='name'?'selected':''}>이름순</option>
       <option value="rate" ${matrixSort==='rate'?'selected':''}>완료율순</option>
       <option value="md" ${matrixSort==='md'?'selected':''}>MD순</option>
     </select>
-    <span style="font-size:11px;color:var(--muted)">운영 중 ${filtered.length}개소</span>
+    ${matrixMd?`<div style="background:var(--accent);color:#000;font-size:11px;padding:4px 10px;border-radius:20px;font-weight:700;cursor:pointer" onclick="document.getElementById('mx-md').value='';render()">👤 ${matrixMd} ✕</div>`:''}
+    <span style="font-size:11px;color:var(--muted);margin-left:auto">${filtered.length}개소 표시</span>
   </div>
-  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
-    <span style="font-size:11px;color:var(--muted);font-weight:600;margin-right:4px">👤 담당자</span>
-    <input type="hidden" id="mx-md" value="${matrixMd}">
-    <div class="matrix-tab ${!matrixMd?'active':''}" onclick="document.getElementById('mx-md').value='';render()" style="font-size:11px;padding:4px 10px">전체</div>
-    ${mds.map(m=>{
-      const mdCount=liveCamps.filter(c=>c.md===m).length;
-      if(!mdCount)return '';
-      return `<div class="matrix-tab ${matrixMd===m?'active':''}" onclick="document.getElementById('mx-md').value='${m}';render()" style="font-size:11px;padding:4px 10px">${m} <span style="opacity:.6">(${mdCount})</span></div>`;
-    }).join('')}
-  </div>
-  <div class="matrix-legend">
-    <span><span class="signal sig-done" style="width:14px;height:14px;font-size:9px;line-height:14px">✅</span> 완료</span>
-    <span><span class="signal sig-wip" style="width:14px;height:14px;font-size:9px;line-height:14px">🔄</span> 진행중</span>
-    <span><span class="signal sig-todo" style="width:14px;height:14px;font-size:9px;line-height:14px">⬜</span> 미시작</span>
-    <span style="margin-left:8px;color:var(--muted)">|</span>
-    <span><span style="display:inline-block;width:14px;height:14px;background:#1e3a5f;border-radius:3px;font-size:8px;line-height:14px;text-align:center;color:var(--accent)">T</span> 내용기입 (클릭하여 입력)</span>
-    <span><span style="display:inline-block;width:14px;height:14px;background:#3b2f63;border-radius:3px;font-size:8px;line-height:14px;text-align:center;color:var(--purple)">P</span> 주기 운영</span>
-  </div>`;
 
-  // === Build Matrix ===
-  if(!filtered.length){
-    html+='<div style="padding:20px;text-align:center;color:var(--muted)">해당 캠핑장이 없습니다.</div>';
-  }else{
-    let h='<div class="matrix-wrap"><table class="matrix"><thead><tr><th rowspan="2" style="min-width:130px;vertical-align:bottom">캠핑장</th>';
-    h+='<th rowspan="2" style="min-width:85px;vertical-align:bottom;font-size:10px;color:var(--accent)">플랜적용일</th>';
-    OP_GROUPS.forEach(g=>{
-      h+=`<th colspan="${g.tasks.length}" style="background:${g.color}22;color:${g.color};border-bottom:2px solid ${g.color};font-size:10px;letter-spacing:.5px">${g.cat}</th>`;
+  <!-- 캠핑장 카드 리스트 -->
+  <div style="display:flex;flex-direction:column;gap:8px">`;
+
+  filtered.forEach(c=>{
+    const pk=campKey(c);
+    const ct=campTaskMap[c.PK]||[];
+    const rate=calcRate(c,campTaskMap);
+    const barColor=rate>=80?'var(--green)':rate>=50?'var(--yellow)':'var(--red)';
+    const isOpen=expandedCamp===pk;
+    const planDate=c.planStartDate||'';
+    const planDisplay=planDate?new Date(planDate).toLocaleDateString('ko-KR',{year:'numeric',month:'short',day:'numeric'}):'';
+    const memoRaw=(c.matrixMemo||'').trim();
+
+    // 카테고리별 완료 카운트
+    const catStats=OP_GROUPS.map(g=>{
+      const checkTasks=g.tasks.filter(t=>t.type==='check');
+      const done=checkTasks.filter(t=>{
+        const match=ct.find(tk=>(tk.taskName||'')==='OP_'+t.id||(tk.taskName||'').includes(t.id));
+        return match&&match.status==='완료';
+      }).length;
+      const inputTasks=g.tasks.filter(t=>t.type!=='check');
+      const inputFilled=inputTasks.filter(t=>{
+        const match=ct.find(tk=>(tk.taskName||'')==='OP_'+t.id||(tk.taskName||'').includes(t.id));
+        return match&&(match.memo||match.status==='완료');
+      }).length;
+      return {cat:g.cat,color:g.color,done,total:checkTasks.length,inputFilled,inputTotal:inputTasks.length};
     });
-    h+='<th rowspan="2" style="min-width:50px;vertical-align:bottom;font-size:10px">완료율</th>';
-    h+='<th rowspan="2" style="min-width:110px;vertical-align:bottom;font-size:10px;color:var(--yellow)">메모</th>';
-    h+='</tr><tr>';
-    OP_GROUPS.forEach(g=>{
-      g.tasks.forEach((t,i)=>{
-        const typeIcon=t.type==='input'?'📝':t.type==='periodic'?'🔄':'';
-        h+=`<th style="font-size:9px;padding:3px 2px;${i===0?'border-left:2px solid '+g.color+'33':''}" title="${t.label}${t.note?' — '+t.note:''}">${t.label}</th>`;
-      });
-    });
-    h+='</tr></thead><tbody>';
 
-    filtered.forEach(c=>{
-      const pk=campKey(c);
-      const ct=campTaskMap[c.PK]||[];
-      // 완료율 계산: check타입만 카운트
-      const checkIds=OP_GROUPS.flatMap(g=>g.tasks.filter(t=>t.type==='check').map(t=>t.id));
-      let doneCount=0;
-      checkIds.forEach(tid=>{
-        const match=ct.find(t=>(t.taskName||'')==='OP_'+tid||(t.taskName||'').includes(tid));
-        if(match&&match.status==='완료')doneCount++;
-      });
-      const rate=checkIds.length?Math.round(doneCount/checkIds.length*100):0;
-      const barColor=rate>=80?'var(--green)':rate>=50?'var(--yellow)':'var(--red)';
-      const planDate=c.planStartDate||'';
-      const planDisplay=planDate?new Date(planDate).toLocaleDateString('ko-KR',{month:'short',day:'numeric'}):'';
-      const memoRaw=(c.matrixMemo||'').trim();
-      const memoPreview=memoRaw?memoRaw.split('\n')[0].slice(0,30)+(memoRaw.length>30?'…':''):'';
+    // 요약 바 카드 (접힌 상태)
+    html+=`
+    <div style="background:var(--card);border:1px solid ${isOpen?'var(--accent)':'var(--border)'};border-radius:10px;overflow:hidden;transition:.2s">
+      <!-- 헤더 (클릭으로 토글) -->
+      <div onclick="expandedCamp=expandedCamp==='${pk}'?null:'${pk}';render()" style="display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;transition:.15s${isOpen?';background:#1c2333':''}">
+        <div style="font-size:14px">${campSignal(c)}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700;color:#fff">${c.name||pk}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:1px">${c.md||''} ${c.region?'· '+c.region:''} ${planDisplay?'· 플랜 '+planDisplay:''}</div>
+        </div>
+        <!-- 카테고리 미니 진행바 -->
+        <div style="display:flex;gap:3px;align-items:center">
+          ${catStats.map(s=>{
+            const pct=s.total?Math.round(s.done/s.total*100):0;
+            const filled=s.inputTotal?s.inputFilled:0;
+            return `<div title="${s.cat}: ${s.done}/${s.total}완료${s.inputTotal?' · 기입 '+s.inputFilled+'/'+s.inputTotal:''}" style="width:${Math.max(24,s.total*6+s.inputTotal*4)}px;height:6px;background:#21262d;border-radius:3px;overflow:hidden;position:relative">
+              <div style="height:100%;width:${pct}%;background:${s.color};border-radius:3px;transition:.3s"></div>
+            </div>`;
+          }).join('')}
+        </div>
+        <div style="min-width:50px;text-align:right">
+          <span style="font-size:15px;font-weight:800;color:${barColor}">${rate}%</span>
+        </div>
+        <div style="color:var(--muted);font-size:14px;transition:.2s;transform:rotate(${isOpen?180:0}deg)">▼</div>
+      </div>`;
 
-      h+=`<tr><td onclick="openDetail('${pk}')" style="cursor:pointer">${campSignal(c)} <b>${c.name||pk}</b><div style="font-size:9px;color:var(--muted);font-weight:400">${c.md||''}</div></td>`;
-      h+=`<td style="font-size:10px;color:${planDate?'var(--accent)':'#333'};white-space:nowrap">${planDisplay||'—'}</td>`;
+    // 펼친 상태: 카테고리별 체크리스트
+    if(isOpen){
+      html+=`<div style="padding:0 16px 16px;border-top:1px solid var(--border)">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;margin-top:12px">`;
 
       OP_GROUPS.forEach(g=>{
-        g.tasks.forEach((taskDef,i)=>{
-          const bl=i===0?`border-left:2px solid ${g.color}33;`:'';
+        html+=`<div style="background:#0d1117;border:1px solid var(--border);border-radius:8px;padding:12px;border-top:3px solid ${g.color}">
+          <div style="font-size:12px;font-weight:700;color:${g.color};margin-bottom:8px;display:flex;justify-content:space-between">
+            <span>${g.cat}</span>
+            <span style="font-size:10px;color:var(--muted);font-weight:400">${g.tasks.filter(t=>t.type==='check').length?(() => {const d=g.tasks.filter(t=>t.type==='check').filter(t=>{const m=ct.find(tk=>(tk.taskName||'')==='OP_'+t.id);return m&&m.status==='완료'}).length;return d+'/'+g.tasks.filter(t=>t.type==='check').length})():''}</span>
+          </div>`;
+
+        g.tasks.forEach(taskDef=>{
           const tName='OP_'+taskDef.id;
           const match=ct.find(t=>(t.taskName||'')===tName||(t.taskName||'').includes(taskDef.id));
 
           if(taskDef.type==='check'){
-            // 체크형: ✅/⬜ 토글
-            if(match){
-              const st=SIG_MAP[match.status]||{cls:'sig-na',icon:'?'};
-              h+=`<td style="${bl}"><span class="signal ${st.cls}" title="${taskDef.label}: ${match.status}" onclick="cycleStatus('${pk}','${match.taskName||tName}')" style="cursor:pointer">${st.icon}</span></td>`;
-            }else{
-              h+=`<td style="${bl}"><span class="signal sig-na" style="cursor:pointer" title="${taskDef.label}: 클릭하여 생성" onclick="createAndCycleTask('${pk}','${tName}','${taskDef.label}')">⬜</span></td>`;
-            }
-          }else if(taskDef.type==='input'){
-            // 내용기입형: 클릭하면 인라인 편집
+            const status=match?.status||'미시작';
+            const isDone=status==='완료';
+            const isWip=status==='진행중';
+            const icon=isDone?'✅':isWip?'🔄':'⬜';
+            const textColor=isDone?'var(--green)':isWip?'var(--accent)':'var(--muted)';
+            const clickFn=match?`cycleStatus('${pk}','${match.taskName||tName}')`:`createAndCycleTask('${pk}','${tName}','${taskDef.label}')`;
+            html+=`<div onclick="${clickFn}" style="display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer;border-bottom:1px solid #1a1f2b;transition:.1s" onmouseover="this.style.background='#161b22'" onmouseout="this.style.background='transparent'">
+              <span style="font-size:14px;min-width:20px;text-align:center">${icon}</span>
+              <span style="font-size:12px;color:${textColor};${isDone?'text-decoration:line-through;opacity:.7':''}">${taskDef.label}</span>
+            </div>`;
+          }else{
+            // input / periodic
             const memo=match?.memo||'';
             const status=match?.status||'미시작';
             const isDone=status==='완료';
-            const cellBg=isDone?'#064e3b44':memo?'#1e3a5f33':'';
-            const preview=memo?memo.slice(0,8)+(memo.length>8?'…':''):'';
-            h+=`<td style="${bl}background:${cellBg};cursor:pointer;position:relative" class="mx-memo-cell" onclick="openTaskInput(this,'${pk}','${tName}','${taskDef.label}')" title="${memo||taskDef.label+': 클릭하여 입력'}">
-              <div style="font-size:9px;color:${memo?'var(--text)':'#444'};text-align:center">${isDone?'✅ ':''}${preview||'—'}</div>
-            </td>`;
-          }else if(taskDef.type==='periodic'){
-            // 주기형: 마지막 실행일 표시
-            const lastDone=match?.memo||'';
-            const status=match?.status||'미시작';
-            const isDone=status==='완료';
-            h+=`<td style="${bl}cursor:pointer;position:relative" class="mx-memo-cell" onclick="openTaskInput(this,'${pk}','${tName}','${taskDef.label}')" title="${taskDef.note||''}: ${lastDone||'미진행'}">
-              <div style="font-size:9px;color:${lastDone?'var(--purple)':'#444'};text-align:center">${lastDone||'—'}</div>
-            </td>`;
+            const icon=taskDef.type==='periodic'?'🔄':'📝';
+            const preview=memo||'클릭하여 입력';
+            html+=`<div class="mx-memo-cell" style="display:flex;align-items:flex-start;gap:8px;padding:5px 0;cursor:pointer;border-bottom:1px solid #1a1f2b;position:relative;transition:.1s" onmouseover="this.style.background='#161b22'" onmouseout="this.style.background='transparent'" onclick="openTaskInput(this,'${pk}','${tName}','${taskDef.label}')">
+              <span style="font-size:14px;min-width:20px;text-align:center">${isDone?'✅':icon}</span>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:12px;color:${memo?'#fff':'var(--muted)'}">${taskDef.label}</div>
+                <div style="font-size:10px;color:${memo?'var(--accent)':'#333'};margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${memo||'—'}</div>
+              </div>
+              ${taskDef.note?`<span style="font-size:9px;color:#444;white-space:nowrap">${taskDef.note}</span>`:''}
+            </div>`;
           }
         });
+        html+=`</div>`;
       });
 
-      h+=`<td><div style="font-size:11px;font-weight:700;color:${barColor}">${rate}%</div><div class="progress-bar"><div class="progress-fill" style="width:${rate}%;background:${barColor}"></div></div></td>`;
-      h+=`<td class="mx-memo-cell" style="text-align:left">
-        <div class="mx-memo-text ${memoRaw?'':'empty'}" onclick="openMatrixMemo(this,'${pk}')" title="${memoRaw?memoRaw.replace(/"/g,'&quot;'):'클릭하여 메모 추가'}">${memoPreview||'+ 메모'}</div>
-      </td>`;
-      h+=`</tr>`;
-    });
-    h+='</tbody></table></div>';
-    html+=h;
-  }
+      // 메모 영역
+      html+=`</div>
+        <div style="margin-top:10px;background:#0d1117;border:1px solid var(--border);border-radius:8px;padding:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:11px;font-weight:700;color:var(--yellow)">메모</span>
+            <button class="edit-btn" onclick="event.stopPropagation();openEditModal('${pk}')">✏️ 상세 수정</button>
+          </div>
+          <div class="mx-memo-cell">
+            <div class="mx-memo-text ${memoRaw?'':'empty'}" onclick="openMatrixMemo(this,'${pk}')" style="font-size:12px;line-height:1.6;min-height:24px">${memoRaw||'클릭하여 메모 추가...'}</div>
+          </div>
+        </div>
+      </div>`;
+    }
 
+    html+=`</div>`;
+  });
+
+  html+=`</div>`;
   el.innerHTML=html;
 }
 
