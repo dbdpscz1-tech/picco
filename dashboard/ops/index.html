@@ -1083,10 +1083,32 @@ function renderPipeline(el){
   el.innerHTML=html;
 }
 
-// ==================== OPERATIONS MATRIX (카드형 UI) ====================
-let expandedCamp=null; // 현재 펼친 캠핑장
+// ==================== OPERATIONS MATRIX ====================
+let expandedCamp=null;
+
+// 컬럼 커스텀 설정 (localStorage 저장)
+const MX_PREF_KEY='picco_matrix_pref';
+function loadMatrixPref(){
+  try{return JSON.parse(localStorage.getItem(MX_PREF_KEY))||{}}catch(e){return{}}
+}
+function saveMatrixPref(p){localStorage.setItem(MX_PREF_KEY,JSON.stringify(p))}
+// pref: { hiddenCats:[], hiddenTasks:[], colWidths:{}, rowHeight:'normal'|'compact'|'wide' }
 
 function renderMatrix(el){
+  const pref=loadMatrixPref();
+  const hiddenCats=pref.hiddenCats||[];
+  const hiddenTasks=pref.hiddenTasks||[];
+  const colWidths=pref.colWidths||{};
+  const rowSize=pref.rowSize||'normal'; // compact, normal, wide
+  const showMemo=pref.showMemo!==false;
+  const showRate=pref.showRate!==false;
+  const nameW=colWidths['_name']||130;
+  const memoW=colWidths['_memo']||160;
+  const cellW=colWidths['_cell']||32;
+  const rowPad={compact:2,normal:6,wide:12}[rowSize]||6;
+  const cellFont={compact:11,normal:13,wide:16}[rowSize]||13;
+  const nameFont={compact:10,normal:12,wide:14}[rowSize]||12;
+
   const liveCamps=camps.filter(c=>['앱 라이브'].includes(c.status));
   const campTaskMap={};
   tasks.forEach(t=>{const pk=t.PK||'';if(!campTaskMap[pk])campTaskMap[pk]=[];campTaskMap[pk].push(t)});
@@ -1105,7 +1127,12 @@ function renderMatrix(el){
   let totalDone=0,totalAll=0;
   filtered.forEach(c=>{const r=calcRate(c,campTaskMap);totalDone+=Math.round(r*totalCheck/100);totalAll+=totalCheck});
   const overallRate=totalAll?Math.round(totalDone/totalAll*100):0;
-  const allTasks=OP_GROUPS.flatMap(g=>g.tasks.map(t=>({...t,cat:g.cat,color:g.color})));
+
+  // 보이는 그룹/태스크만 필터
+  const visibleGroups=OP_GROUPS.filter(g=>!hiddenCats.includes(g.cat));
+  const allTasks=visibleGroups.flatMap(g=>g.tasks.filter(t=>!hiddenTasks.includes(t.id)).map(t=>({...t,cat:g.cat,color:g.color})));
+
+  const settingsOpen=document.getElementById('mx-settings-open')?.dataset?.open==='1';
 
   let html=`
   <!-- 상단 요약 -->
@@ -1129,8 +1156,8 @@ function renderMatrix(el){
     }).join('')}
   </div>
 
-  <!-- 필터/정렬 -->
-  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+  <!-- 필터/정렬/설정 -->
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
     <input type="hidden" id="mx-md" value="${matrixMd}">
     <select id="mx-sort" onchange="render()" style="background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:11px">
       <option value="name" ${matrixSort==='name'?'selected':''}>이름순</option>
@@ -1138,21 +1165,82 @@ function renderMatrix(el){
       <option value="md" ${matrixSort==='md'?'selected':''}>MD순</option>
     </select>
     ${matrixMd?`<div style="background:var(--accent);color:#000;font-size:11px;padding:4px 10px;border-radius:20px;font-weight:700;cursor:pointer" onclick="document.getElementById('mx-md').value='';render()">👤 ${matrixMd} ✕</div>`:''}
-    <span style="font-size:11px;color:var(--muted);margin-left:auto">${filtered.length}개소 표시</span>
+    <span style="font-size:11px;color:var(--muted);margin-left:auto">${filtered.length}개소</span>
+    <div id="mx-settings-open" data-open="${settingsOpen?'1':'0'}" onclick="this.dataset.open=this.dataset.open==='1'?'0':'1';document.getElementById('mx-settings-panel').style.display=this.dataset.open==='1'?'block':'none'" style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;color:var(--accent);user-select:none">⚙️ 표 설정</div>
+  </div>
+
+  <!-- 설정 패널 -->
+  <div id="mx-settings-panel" style="display:${settingsOpen?'block':'none'};background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
+    <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start">
+
+      <!-- 카테고리 표시/숨기기 -->
+      <div style="min-width:180px">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:8px">카테고리 표시</div>
+        ${OP_GROUPS.map(g=>{
+          const hidden=hiddenCats.includes(g.cat);
+          return `<label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;cursor:pointer;font-size:11px;color:${hidden?'#555':g.color}">
+            <input type="checkbox" ${hidden?'':'checked'} onchange="toggleMatrixCat('${g.cat}')"> ${g.cat} <span style="color:var(--muted);font-size:9px">(${g.tasks.length})</span>
+          </label>`;
+        }).join('')}
+      </div>
+
+      <!-- 개별 컬럼 표시/숨기기 -->
+      <div style="min-width:200px;max-height:200px;overflow-y:auto">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:8px">개별 항목 표시</div>
+        ${OP_GROUPS.filter(g=>!hiddenCats.includes(g.cat)).map(g=>
+          g.tasks.map(t=>{
+            const hidden=hiddenTasks.includes(t.id);
+            return `<label style="display:flex;align-items:center;gap:6px;margin-bottom:3px;cursor:pointer;font-size:10px;color:${hidden?'#555':g.color}">
+              <input type="checkbox" ${hidden?'':'checked'} onchange="toggleMatrixTask('${t.id}')"> ${t.label}
+            </label>`;
+          }).join('')
+        ).join('')}
+      </div>
+
+      <!-- 크기 조절 -->
+      <div style="min-width:200px">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:8px">행 높이</div>
+        <div style="display:flex;gap:4px;margin-bottom:12px">
+          ${['compact','normal','wide'].map(s=>`<button onclick="updateMatrixPref('rowSize','${s}')" style="padding:4px 12px;border-radius:4px;border:1px solid ${rowSize===s?'var(--accent)':'var(--border)'};background:${rowSize===s?'var(--accent)':'var(--card)'};color:${rowSize===s?'#000':'var(--text)'};font-size:10px;cursor:pointer;font-weight:${rowSize===s?'700':'400'}">${{compact:'좁게',normal:'보통',wide:'넓게'}[s]}</button>`).join('')}
+        </div>
+
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px">셀 너비: ${cellW}px</div>
+        <input type="range" min="20" max="60" value="${cellW}" oninput="updateMatrixPref('colWidths',Object.assign(loadMatrixPref().colWidths||{},{_cell:+this.value}))" style="width:100%;accent-color:var(--accent)">
+
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;margin-top:8px">캠핑장 열: ${nameW}px</div>
+        <input type="range" min="80" max="250" value="${nameW}" oninput="updateMatrixPref('colWidths',Object.assign(loadMatrixPref().colWidths||{},{_name:+this.value}))" style="width:100%;accent-color:var(--accent)">
+
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;margin-top:8px">메모 열: ${memoW}px</div>
+        <input type="range" min="60" max="400" value="${memoW}" oninput="updateMatrixPref('colWidths',Object.assign(loadMatrixPref().colWidths||{},{_memo:+this.value}))" style="width:100%;accent-color:var(--accent)">
+
+        <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+          <label style="font-size:10px;color:var(--muted);display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" ${showRate?'checked':''} onchange="updateMatrixPref('showRate',this.checked)"> 완료율 표시</label>
+          <label style="font-size:10px;color:var(--muted);display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" ${showMemo?'checked':''} onchange="updateMatrixPref('showMemo',this.checked)"> 메모 표시</label>
+        </div>
+
+        <button onclick="localStorage.removeItem('${MX_PREF_KEY}');render()" style="margin-top:10px;padding:4px 12px;border-radius:4px;border:1px solid var(--border);background:var(--card);color:var(--red);font-size:10px;cursor:pointer">초기화</button>
+      </div>
+    </div>
   </div>
 
   <!-- 테이블형 매트릭스 -->
   <div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px;background:var(--card)">
-  <table style="width:100%;border-collapse:collapse;font-size:11px;white-space:nowrap">
+  <table style="border-collapse:collapse;font-size:11px;white-space:nowrap;table-layout:fixed">
+    <colgroup>
+      <col style="width:${nameW}px">
+      ${showRate?'<col style="width:48px">':''}
+      ${allTasks.map(()=>`<col style="width:${cellW}px">`).join('')}
+      ${showMemo?`<col style="width:${memoW}px">`:''}
+    </colgroup>
     <thead>
       <tr style="background:#161b22">
-        <th rowspan="2" style="position:sticky;left:0;z-index:3;background:#161b22;padding:8px 10px;text-align:left;border-bottom:2px solid var(--border);border-right:2px solid var(--border);min-width:120px;font-size:12px;color:var(--text)">캠핑장</th>
-        <th rowspan="2" style="padding:6px 4px;text-align:center;border-bottom:2px solid var(--border);color:var(--muted);min-width:40px">완료</th>
-        ${OP_GROUPS.map(g=>`<th colspan="${g.tasks.length}" style="padding:6px 4px;text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);color:${g.color};font-weight:800;font-size:11px">${g.cat}</th>`).join('')}
-        <th rowspan="2" style="padding:6px 4px;text-align:left;border-bottom:2px solid var(--border);border-left:2px solid var(--border);color:var(--yellow);min-width:100px">메모</th>
+        <th rowspan="2" style="position:sticky;left:0;z-index:3;background:#161b22;padding:${rowPad}px 8px;text-align:left;border-bottom:2px solid var(--border);border-right:2px solid var(--border);font-size:${nameFont}px;color:var(--text)">캠핑장</th>
+        ${showRate?`<th rowspan="2" style="padding:${rowPad}px 2px;text-align:center;border-bottom:2px solid var(--border);color:var(--muted)">완료</th>`:''}
+        ${visibleGroups.map(g=>{const cnt=g.tasks.filter(t=>!hiddenTasks.includes(t.id)).length;return cnt?`<th colspan="${cnt}" style="padding:${rowPad}px 2px;text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);color:${g.color};font-weight:800;font-size:11px">${g.cat}</th>`:''}).join('')}
+        ${showMemo?`<th rowspan="2" style="padding:${rowPad}px 4px;text-align:left;border-bottom:2px solid var(--border);border-left:2px solid var(--border);color:var(--yellow)">메모</th>`:''}
       </tr>
       <tr style="background:#0d1117">
-        ${allTasks.map(t=>`<th style="padding:3px 2px;text-align:center;border-bottom:2px solid var(--border);border-left:1px solid #1e242e;color:var(--muted);font-weight:400;font-size:9px;max-width:36px;overflow:hidden;writing-mode:vertical-rl;text-orientation:mixed;height:60px" title="${t.label}${t.note?' ('+t.note+')':''}">${t.label}</th>`).join('')}
+        ${allTasks.map(t=>`<th style="padding:2px 1px;text-align:center;border-bottom:2px solid var(--border);border-left:1px solid #1e242e;color:var(--muted);font-weight:400;font-size:9px;overflow:hidden;writing-mode:vertical-rl;text-orientation:mixed;height:${rowSize==='compact'?40:rowSize==='wide'?80:60}px" title="${t.label}${t.note?' ('+t.note+')':''}">${t.label}</th>`).join('')}
       </tr>
     </thead>
     <tbody>`;
@@ -1166,11 +1254,11 @@ function renderMatrix(el){
     const rowBg=idx%2===0?'transparent':'#0a0e14';
 
     html+=`<tr style="background:${rowBg};border-bottom:1px solid #1a1f2b" onmouseover="this.style.background='#1c2333'" onmouseout="this.style.background='${rowBg}'">
-      <td style="position:sticky;left:0;z-index:2;background:${idx%2===0?'var(--card)':'#0d1117'};padding:6px 10px;border-right:2px solid var(--border);font-weight:600;color:#fff;font-size:12px">
-        <div>${c.name||pk}</div>
-        <div style="font-size:9px;color:var(--muted);font-weight:400;margin-top:1px">${c.md||''}</div>
+      <td style="position:sticky;left:0;z-index:2;background:${idx%2===0?'var(--card)':'#0d1117'};padding:${rowPad}px 8px;border-right:2px solid var(--border);font-weight:600;color:#fff;font-size:${nameFont}px;overflow:hidden;text-overflow:ellipsis">
+        <div style="overflow:hidden;text-overflow:ellipsis">${c.name||pk}</div>
+        ${rowSize!=='compact'?`<div style="font-size:9px;color:var(--muted);font-weight:400;margin-top:1px">${c.md||''}</div>`:''}
       </td>
-      <td style="text-align:center;padding:4px;font-weight:800;font-size:12px;color:${barColor}">${rate}%</td>`;
+      ${showRate?`<td style="text-align:center;padding:${rowPad}px 2px;font-weight:800;font-size:${nameFont}px;color:${barColor}">${rate}%</td>`:''}`;
 
     allTasks.forEach((taskDef,ti)=>{
       const tName='OP_'+taskDef.id;
@@ -1185,7 +1273,7 @@ function renderMatrix(el){
         const icon=isDone?'✅':isWip?'🔄':'';
         const bg=isDone?'#0d2818':isWip?'#1a1a2e':'';
         const clickFn=match?`cycleStatus('${pk}','${match.taskName||tName}')`:`createAndCycleTask('${pk}','${tName}','${taskDef.label}')`;
-        html+=`<td onclick="${clickFn}" style="text-align:center;padding:2px;cursor:pointer;${borderLeft}${bg?'background:'+bg+';':''}font-size:13px" title="${taskDef.label}: ${status}">${icon}</td>`;
+        html+=`<td onclick="${clickFn}" style="text-align:center;padding:${rowPad-2}px 1px;cursor:pointer;${borderLeft}${bg?'background:'+bg+';':''}font-size:${cellFont}px" title="${taskDef.label}: ${status}">${icon}</td>`;
       }else{
         const memo=match?.memo||'';
         const status=match?.status||'미시작';
@@ -1193,14 +1281,16 @@ function renderMatrix(el){
         const hasContent=memo||isDone;
         const icon=isDone?'✅':memo?'📝':'';
         const bg=hasContent?'#1a1520':'';
-        html+=`<td onclick="openTaskInput(this,'${pk}','${tName}','${taskDef.label}')" style="text-align:center;padding:2px;cursor:pointer;${borderLeft}${bg?'background:'+bg+';':''}font-size:13px;position:relative" title="${taskDef.label}: ${memo||status}${taskDef.note?' ('+taskDef.note+')':''}">${icon}</td>`;
+        html+=`<td onclick="openTaskInput(this,'${pk}','${tName}','${taskDef.label}')" style="text-align:center;padding:${rowPad-2}px 1px;cursor:pointer;${borderLeft}${bg?'background:'+bg+';':''}font-size:${cellFont}px;position:relative" title="${taskDef.label}: ${memo||status}${taskDef.note?' ('+taskDef.note+')':''}">${icon}</td>`;
       }
     });
 
-    // 메모 열
-    html+=`<td style="padding:4px 8px;border-left:2px solid var(--border);max-width:200px;white-space:normal;word-break:break-all">
-      <div class="mx-memo-cell" onclick="openMatrixMemo(this,'${pk}')" style="font-size:10px;color:${memoRaw?'var(--text)':'#333'};cursor:pointer;line-height:1.4;max-height:40px;overflow:hidden">${memoRaw||'+'}</div>
-    </td></tr>`;
+    if(showMemo){
+      html+=`<td style="padding:${rowPad}px 6px;border-left:2px solid var(--border);white-space:normal;word-break:break-all;overflow:hidden">
+        <div class="mx-memo-cell" onclick="openMatrixMemo(this,'${pk}')" style="font-size:10px;color:${memoRaw?'var(--text)':'#333'};cursor:pointer;line-height:1.4;max-height:${rowSize==='compact'?20:40}px;overflow:hidden">${memoRaw||'+'}</div>
+      </td>`;
+    }
+    html+=`</tr>`;
   });
 
   html+=`</tbody></table></div>
@@ -1226,6 +1316,29 @@ function renderMatrix(el){
   </div>`;
 
   el.innerHTML=html;
+}
+
+// 매트릭스 설정 변경 핸들러
+function toggleMatrixCat(cat){
+  const p=loadMatrixPref();
+  const h=p.hiddenCats||[];
+  const idx=h.indexOf(cat);
+  if(idx>=0)h.splice(idx,1);else h.push(cat);
+  p.hiddenCats=h;
+  saveMatrixPref(p);render();
+}
+function toggleMatrixTask(taskId){
+  const p=loadMatrixPref();
+  const h=p.hiddenTasks||[];
+  const idx=h.indexOf(taskId);
+  if(idx>=0)h.splice(idx,1);else h.push(taskId);
+  p.hiddenTasks=h;
+  saveMatrixPref(p);render();
+}
+function updateMatrixPref(key,val){
+  const p=loadMatrixPref();
+  p[key]=val;
+  saveMatrixPref(p);render();
 }
 
 // 내용기입/주기 과업 인라인 편집
