@@ -544,6 +544,18 @@ async function loadAll(){
     deletedCamps=allCamps.filter(x=>x.status==='삭제됨');
     tasks=t.data;
     document.getElementById('lastUpdate').textContent=new Date().toLocaleTimeString('ko-KR');
+    // 캠핑장별 리뷰 답변 페르소나 매핑
+    if(Object.keys(CAMP_REPLY_PROFILES).length===0){
+      Object.entries(REPLY_PROFILE_DATA).forEach(([excelName,profile])=>{
+        const camp=camps.find(c=>{
+          const n=(c.name||'').replace(/\s/g,'');
+          const en=excelName.replace(/\s/g,'');
+          return n.includes(en)||en.includes(n)||n===en;
+        });
+        if(camp)CAMP_REPLY_PROFILES[campKey(camp)]=profile;
+        else CAMP_REPLY_PROFILES[excelName]=profile;
+      });
+    }
     render();
   }catch(e){showToast('API 연결 실패: '+e.message,'var(--red)')}
 }
@@ -1870,8 +1882,83 @@ async function saveNewCamp(e){
 
 // ==================== REVIEW REPLY ====================
 
-// 캠핑장별 스타일 프로필 저장소 (데이터 로드 후 채워짐)
+// 캠핑장별 스타일 프로필 저장소
 const CAMP_REPLY_PROFILES={};
+
+// 엑셀 분석 기반 캠핑장별 답글 페르소나 데이터
+const REPLY_PROFILE_DATA={
+  "가평 모아이캠프":{
+    samples:["안녕하세요~ 모아이 캠프입니다. 저희는 사이트마다 기준인원 초과시, 인원추가의 경우 추가 비용을 받고 있으며 비용을 내신분들에 한해서만 이용이 가능합니다. 관리자가 인원에 대해서는 직접 체크하고 있으므로 무단으로 방문하시는 손님은 없으니 오해 없으셨으면 합니다. 감사합니다^^"],
+    avgLength:237,tone:"정중하고 따뜻한",
+    greeting:"안녕하세요~ 모아이 캠프입니다",closing:"감사합니다^^",
+    traits:["존댓말","이모티콘 활용","상세한 답변","감사 표현"],
+    keywords:["모아이","캠프입니다","감사합니다","신경쓰도록"],
+    emojiUse:true,honorific:true,exclamation:0.0
+  },
+  "평택 낭만팩토리":{
+    samples:["잘 지내고 가신 것 같아 다행입니다 ㅎㅎ 아이보리가 이쁘네요 ^_^","불편하게 하는 이웃이 있었군요.. 말씀해주시면 캠지기가 바로 출동합니다! 타인에게 피해가 가는 행동은 정말 참을 수가 없어요 ㅜ 불편하신 점이 많으셨을텐데 후기 작성 감사드립니다~ 더욱 분주히 둘러보도록 할게요","맑은 날 기분 좋게 다녀가신 것 같아 저도 기분이 아주 좋습니다 ㅎㅎㅎ 동네 주민들! 언제나 환영이에요^^","청소한다고 열심히 하는데 좋게 봐주셔서 감사합니다^^","저도 기분이가 좋아요 ^_^","아주 의젓한 강아지가 보이네요 ㅎㅎㅎ 감사합니다","맛난 음식을 많이 드시고 가셨군요 ㅎㅎ 정성스런 후기 작성 감사드려요^^","좋게 봐주셔서 감사할 따름입니다^^ 즐거운 추억 만드셨길 바랍니다!","성숙한 캠핑 문화가 정착되어서 서로에게 피해가 안간다면 참 좋을텐데 말이죠 ... ㅜ_ㅜ 불편하신 부분이 있으시다면 언제든지 연락주시면 바로 캠지기가 출동합니다! 후기 작성 감사드려요~~~","아이쿠 애기들 넘 귀엽네요 ㅋㅋㅋ 후기작성 감사드려요!"],
+    avgLength:108,tone:"친근하고 캐주얼한",
+    greeting:"",closing:"후기 작성 감사드려요~",
+    traits:["반말 섞인 친근체","ㅎㅎ ㅋㅋ 활용","^_^ ^^ 이모티콘","감사 표현","캠지기 출동 멘트","짧고 따뜻한 반응"],
+    keywords:["감사드립니다","후기","감사드려요","다행입니다","기분","ㅎㅎ","환영","추억"],
+    emojiUse:true,honorific:true,exclamation:0.6,
+    styleNote:"낭만팩토리 캠지기는 매우 캐주얼하고 친근함. ㅎㅎ, ^_^, ^^ 자주 사용. 리뷰 내용에 직접 반응하는 스타일 (사진 예쁘다, 강아지 귀엽다 등). 불편사항엔 '캠지기 출동합니다!' 패턴."
+  },
+  "평창바샘캠핑장":{
+    samples:["오시는 모든분이 휴식하고 가셨으면 하는맘인데 조용히 잘쉬고 가셨다니 감사드립니다. 언제든 쉬고싶으실때 방문해주시길 바래봅니다.건강하시고 또 뵙겠습니다~~^-^","축제기간 방문해주셔서 좋은추억 남기셨으면 좋겠네요~좋은후기글도 감사합니다^-^ 사진도 정말 예쁘게 잘찍어주셨네요~","요즘 비가 너무 자주와서 걱정이 되더라구요~아쉬운 캠핑이 되셨을것같아 아쉽지만 다음 방문때 화창하고 맑은 날씨에 다시뵙길 바래봅니다. 그때까지 건강하시고 다시 뵈어요^-^","올해 유난히 더운해였던것같습니다. 잘쉬다가셨다하니 감사드립니다. 시원하고 청량한 가을에 다시 뵙길바래봅니다~^-^","후기글 감사합니다. 다음에 방문하실때는 편한히 쉴수있도록 오래 머물다 가셔요...ㅎ 또 오시는 그날까지 열심히 가꾸어 보겠습니다^^","예의바른 따님들이 벌써 보고 싶네요~^^. 계시는 동안 캠핑장하는 보람을 느끼게 해주신분들이 셨어요...감사합니다.","하늘과나무 사이트사이사이 아름다운 사진들도 올려주셨네요..감사합니다. 오시면 힐링하고 가실수있도록 예쁘게 꾸며보겠습니다..","감동스런 후기 올려주셔서 힘듬이 싹~사라지는것같아요.진심으로 감사드립니다.잘쉬었다가신다하니 안전한 귀가길 되시고 또 찾아주세요~감사합니다^-^","캠핑장 찾아주셔서 진심으로 감사드립니다. 앞으로도 더 깨끗하게 관리하도록 노력하겠습니다~가을에 또 들려주세요~진짜 예쁘답니다^-^"],
+    avgLength:85,tone:"따뜻하고 정감 있는",
+    greeting:"",closing:"건강하시고 또 뵙겠습니다~~^-^",
+    traits:["존댓말","^-^ 시그니처","~물결표 활용","건강 인사","계절감 표현","재방문 유도"],
+    keywords:["감사드립니다","방문해주시길","바래봅니다","건강하시고","뵙겠습니다","진심으로","예쁘게","찾아주셔서"],
+    emojiUse:true,honorific:true,exclamation:0.0,
+    styleNote:"바샘 캠지기는 ^-^ 시그니처 이모티콘 사용. '건강하시고', '바래봅니다' 마무리 패턴. 계절/날씨 언급 많음. ~물결표로 부드러운 톤."
+  },
+  "쌍계곡펜션&캠핑":{
+    samples:["불편드려 죄송합니다 변기쪽 전등 달아놓겠습니다 감사합니다","시설관리 신경쓰도록 노력하겠습니다 감사합니다","불편을드려죄송합니다 화장실.개수대는조만간수리하도록하겠습니다매너타임도잘지킬수있도록신경스겠습니다죄송합니다","감사합니다 시설관리 신경쓰도록하겠습니다","이용해주셔서감사합니다.시설은손님들불편이없도록초대한신경쓰겠습니다.고맙습니다"],
+    avgLength:34,tone:"간결하고 심플한",
+    greeting:"",closing:"",
+    traits:["존댓말","매우 간결","사과 중심","시설개선 약속"],
+    keywords:["감사합니다","죄송합니다","시설관리","신경쓰도록","노력하겠습니다","불편"],
+    emojiUse:false,honorific:true,exclamation:0.0,
+    styleNote:"쌍계곡은 매우 짧고 간결. 주로 사과+개선약속 패턴. 이모티콘 미사용."
+  },
+  "만리포솔향기캠핑장":{
+    samples:["반갑습니다, 캠퍼님! 만리포 솔향기입니다. ^^ 리뷰를 읽는 내내 캠퍼님의 만족스러웠던 캠핑 풍경이 그려져 저절로 미소가 지어집니다. '운이 좋았다'고 말씀해 주셨지만, 아마 평소에 좋은 일을 많이 하셔서 날씨와 분위기까지 모두 캠퍼님 편이었던 게 아닐까 싶네요! 캠퍼님 같은 분들이 계셔서 캠핑장을 운영하는 즐거움이 배가 됩니다."],
+    avgLength:415,tone:"활기차고 친근한",
+    greeting:"반갑습니다, 캠퍼님! 만리포 솔향기입니다. ^^",closing:"다음에 또 찾아주세요!",
+    traits:["존댓말","캠퍼님 호칭","상세하고 긴 답변","느낌표 많이 사용","리뷰 내용 구체 언급","재방문 유도"],
+    keywords:["캠퍼님","만리포","솔향기","반갑습니다","미소","추억","감사"],
+    emojiUse:true,honorific:true,exclamation:4.0,
+    styleNote:"만리포솔향기는 매우 길고 상세한 답변. '캠퍼님' 호칭 사용. 리뷰 내용을 구체적으로 인용하며 반응. 느낌표 많이 사용."
+  },
+  "가마실캠핑장":{
+    samples:["소중한 후기감사드립니다. 불편함없이 좋은추억남기고가신것같아 제가기분이좋네요. 사진도 너무잘찍으셨어요~~ 개수대의에어컨은 가미실에서드리는 여름 선물이입니당.ㅎㅎ","소종한후기 감사드립니다. 아쉽게도 일찍가셔서 저히도 걱정했어요.ㅠㅠ 다음방문때는 퇴실시간 넘어서까지 꽉꽉 채워서 즐기고 가세요 ~! 저히는 캠퍼님들이 더만족하실수 있도록 더욱 노력하고 있겠습니다.","평일캠이라 더욱 좋으셨던거같네요. 조금더 여유롭고 조금더자유롭게보내다가셔서 더좋은 추억으로 남은것같습니다. 방문해주셔서 감사합니다.","갑작스런방문에도 너무나반가웠습니다. 첫날부터 허리를다치시는바람에 걱정이 많이됐었어요. 그래도 알차고 즐겁게 휴가를 잘보내고 가셨다니 너무나 다행이네요.","소중한후기 감사드립니다. 저히캠핑장의 장점들을 두루두루 잘이용하고가셨네요. 더운여름 타프사이트는 요즘필수이죠ㅎㅎ","벌레없이 타프존에서 잘지내다가셨다니 맘이놓이네요. 앞으로도 방역열심히잘해서 칭찬받도록 더욱노력하겠습니다.","좋은추억남기고가신다니 저히가 너무감사드립니다. 다음방문때에도 만족할수있도록 더욱노력하겠습니다."],
+    avgLength:97,tone:"따뜻하고 열정적인",
+    greeting:"소중한 후기 감사드립니다",closing:"더욱 노력하겠습니다",
+    traits:["존댓말","ㅎㅎ ㅠㅠ 활용","~ 물결표","입니당 같은 귀여운 표현","개인적 감정 표현","재방문 유도"],
+    keywords:["감사드립니다","더욱노력하겠습니다","소중한","추억","다행","기분이좋네요"],
+    emojiUse:false,honorific:true,exclamation:0.1,
+    styleNote:"가마실 캠지기는 진심이 느껴지는 따뜻한 스타일. '저히'(저희 오타), '입니당' 등 자연스러운 구어체. 감정 표현 풍부."
+  },
+  "이안숲속캠핑장":{
+    samples:["고객님, 불편을 끼쳐드려 죄송합니다. 청소상태는 담당직원분께 단단히 일러두었습니다. 그리고 저희는 물놀이장 물관리를 가장 신경 쓰고 있는데, 한 통에 12만 원인 밤나무 추출 물질로 만든 친환경 약품으로 수질 관리를 하고 있습니다. 아이들의 피부를 최우선으로 걱정하기 때문입니다."],
+    avgLength:400,tone:"정중하고 설명적인",
+    greeting:"고객님",closing:"",
+    traits:["존댓말","고객님 호칭","매우 상세한 설명","시설/운영 자부심","사과 후 설명"],
+    keywords:["고객님","저희는","관리","불편","죄송합니다","신경"],
+    emojiUse:false,honorific:true,exclamation:0.0,
+    styleNote:"이안숲속은 매우 정중하고 설명적. '고객님' 호칭. 시설 운영에 대한 상세 설명 포함."
+  },
+  "가델캠핑장":{
+    samples:["해당날짜에 소란스러웠던 곳은 K4 분들로 확인 했습니다. 장박 분들은 12시에 주무셨다고 합니다. 제대로 관리 못해 죄송합니다.","ㅋㅋㅋ 저 댓글 안쓰는데 그때 일어낫어요ㅋㅋㅋㅋㅋ할게없어서ㅋㅋㅋㅋㅋㅋ그걸보셨네ㅋㅋㅋㅋ아 웃겨"],
+    avgLength:63,tone:"간결하고 솔직한",
+    greeting:"",closing:"",
+    traits:["반말 섞인 솔직체","ㅋㅋㅋ 활용","간결한 답변","직접적 소통"],
+    keywords:["확인","죄송합니다","ㅋㅋㅋ"],
+    emojiUse:true,honorific:false,exclamation:0.0,
+    styleNote:"가델은 매우 솔직하고 캐주얼. 반말도 섞어 씀. 데이터 2건뿐이라 패턴 제한적."
+  }
+};
 
 // 기본 친절 템플릿 (데이터 부족 시 사용)
 const DEFAULT_STYLE={
@@ -1958,57 +2045,111 @@ function extractTopics(review){
   return topics;
 }
 
-// 답변 생성 (로컬 템플릿 기반)
+// 답변 생성 (캠핑장 페르소나 기반)
 function generateReply(campName,review,profile){
   const p=profile||DEFAULT_STYLE;
   const topics=extractTopics(review);
   const isNeg=topics.includes('아쉬운점');
+  const isCasual=p.tone&&(p.tone.includes('캐주얼')||p.tone.includes('친근')||p.tone.includes('솔직'));
+  const isShort=p.avgLength&&p.avgLength<60;
+  const isLong=p.avgLength&&p.avgLength>200;
+  const useTilde=p.traits&&p.traits.some(t=>t.includes('물결'));
+  const useKk=p.traits&&p.traits.some(t=>t.includes('ㅎㅎ')||t.includes('ㅋㅋ'));
+  const endChar=useTilde?'~':p.exclamation>1?'!':'.';
+  const smiley=p.emojiUse?(useTilde?'^-^':useKk?' ㅎㅎ':' ^^'):'';
 
   // 인사
-  let greeting=p.greeting||DEFAULT_STYLE.greeting;
-  greeting=greeting.replace('{campName}',campName);
-  if(!greeting.includes(campName)&&!greeting.match(/저희|우리/))greeting=`안녕하세요, ${campName}입니다${p.emojiUse?' :)':'.'} `;
+  let greeting='';
+  if(p.greeting&&p.greeting.length>3){
+    greeting=p.greeting.replace('{campName}',campName);
+  }else if(isCasual){
+    greeting='';
+  }else{
+    greeting=`안녕하세요, ${campName}입니다${smiley||'.'}`;
+  }
 
-  // 감사
-  let thanks=`소중한 후기 남겨주셔서 정말 감사합니다${p.exclamation>1?'!':'.'}`;
+  // 감사 (스타일별 분기)
+  let thanks='';
+  if(isShort){
+    thanks=isNeg?'':'감사합니다'+endChar;
+  }else if(isCasual){
+    thanks=`후기 작성 감사드려요${smiley}`;
+  }else{
+    thanks=`소중한 후기 남겨주셔서 정말 감사합니다${endChar}`;
+  }
 
-  // 본문 (토픽별 반응)
-  const topicResponses={
-    '청결':`청결하게 느끼셨다니 저희 관리팀이 보람을 느낍니다${p.emojiUse?' 😊':''}`,
+  // 본문 (토픽별 반응 — 스타일 맞춤)
+  const casual={
+    '청결':`청소 깨끗하다고 해주시니 보람차네요${smiley}`,
+    '친절':`따뜻한 말씀 감사드려요~ 저도 기분이 좋습니다${smiley}`,
+    '자연환경':`자연환경 좋아해 주셔서 기쁩니다${smiley}`,
+    '시설':`시설 만족하셨다니 다행이에요${endChar}`,
+    '가족/아이':`아이들과 좋은 시간 보내셨군요${smiley} 뿌듯합니다`,
+    '힐링':`힐링하고 가신 것 같아 다행입니다${smiley}`,
+    '식사':`맛있는 거 많이 드셨나 보네요${smiley}`,
+    '불멍/야경':`불멍 하셨군요${smiley} 좋은 추억이 되셨길 바랍니다`,
+    '사이트 공간':`사이트 넓게 쓰셨다니 좋았겠어요${endChar}`,
+    '재방문의사':`또 방문해 주신다니 감사합니다${smiley}`,
+    '아쉬운점':`아쉬운 부분 말씀해주시면 바로 개선하겠습니다${endChar} 불편드려 죄송해요`,
+  };
+  const formal={
+    '청결':`청결하게 느끼셨다니 저희 관리팀이 보람을 느낍니다${endChar}`,
     '친절':'따뜻한 말씀에 저희 직원들도 큰 힘이 됩니다.',
-    '자연환경':`저희 캠핑장의 자연환경을 좋아해 주셔서 기쁩니다${p.emojiUse?' 🌿':''}`,
+    '자연환경':`저희 캠핑장의 자연환경을 좋아해 주셔서 기쁩니다${endChar}`,
     '시설':'시설 관련 만족해 주셔서 감사합니다. 더 나은 환경을 위해 계속 노력하겠습니다.',
-    '가족/아이':`가족분들과 함께 즐거운 시간 보내셨다니 정말 뿌듯합니다${p.emojiUse?' 👨‍👩‍👧‍👦':''}`,
+    '가족/아이':'가족분들과 함께 즐거운 시간 보내셨다니 정말 뿌듯합니다.',
     '힐링':'편안한 힐링 시간을 보내셨다니 다행입니다.',
     '식사':'맛있는 식사까지 즐기셨다니 좋은 추억이 되셨길 바랍니다.',
-    '불멍/야경':`불멍과 함께한 밤이 특별한 추억이 되셨길 바랍니다${p.emojiUse?' 🔥':''}`,
+    '불멍/야경':'불멍과 함께한 밤이 특별한 추억이 되셨길 바랍니다.',
     '사이트 공간':'넓은 사이트에서 쾌적하게 이용해 주셨다니 기쁩니다.',
-    '재방문의사':`다음에도 찾아주신다니 정말 감사하고 기대가 됩니다${p.exclamation>1?'!':'.'}`,
+    '재방문의사':`다음에도 찾아주신다니 정말 감사하고 기대가 됩니다${endChar}`,
     '아쉬운점':'말씀해 주신 아쉬운 부분은 저희가 꼭 개선하도록 하겠습니다. 소중한 의견 감사합니다.',
   };
+  const topicResponses=isCasual?casual:formal;
 
   let body='';
-  const posTopics=topics.filter(t=>t!=='아쉬운점');
-  if(posTopics.length){
-    body=posTopics.slice(0,3).map(t=>topicResponses[t]||'').filter(Boolean).join(' ');
+  if(isShort&&isNeg){
+    body='불편드려 죄송합니다. 개선하도록 하겠습니다.';
+  }else if(isShort){
+    body='즐겁게 이용해주셔서 감사합니다.';
+  }else{
+    const posTopics=topics.filter(t=>t!=='아쉬운점');
+    if(posTopics.length){
+      body=posTopics.slice(0,isLong?4:3).map(t=>topicResponses[t]||'').filter(Boolean).join(' ');
+    }
+    if(isNeg){
+      body+=(body?' ':'')+topicResponses['아쉬운점'];
+    }
+    if(!body)body=isCasual?`즐거운 시간 보내셨다니 정말 기쁩니다${smiley}`:`즐거운 시간 보내셨다니 정말 기쁩니다${endChar}`;
   }
-  if(isNeg){
-    body+=(body?' ':'')+topicResponses['아쉬운점'];
-  }
-  if(!body)body=`즐거운 시간 보내셨다니 정말 기쁩니다${p.emojiUse?' 😊':'.'}`;
 
   // 마무리
-  let closing=p.closing||DEFAULT_STYLE.closing;
-  if(!closing)closing=`다음에도 좋은 추억 만들어 가시길 바랍니다. 감사합니다${p.emojiUse?' 🙏':'!'}`;
+  let closing='';
+  if(isShort){
+    closing='감사합니다'+endChar;
+  }else if(p.closing&&p.closing.length>3){
+    closing=p.closing;
+  }else if(isCasual){
+    closing=`또 놀러오세요${smiley}`;
+  }else if(useTilde){
+    closing=`다음에도 좋은 추억 만들어 가시길 바랍니다~ 감사합니다${smiley}`;
+  }else{
+    closing=`다음에도 좋은 추억 만들어 가시길 바랍니다. 감사합니다${p.emojiUse?' 🙏':'!'}`;
+  }
 
   // 조합
-  let reply=`${greeting}\n${thanks}\n${body}\n${closing}`;
+  let parts=[greeting,thanks,body,closing].filter(Boolean);
+  let reply;
+  if(isShort){
+    reply=parts.join(' ');
+  }else{
+    reply=parts.join('\n');
+  }
 
   // 길이 조절 (프로필 평균 길이에 맞춤)
   const targetLen=p.avgLength||150;
-  if(reply.length>targetLen*1.5&&targetLen<120){
-    // 간결 스타일이면 줄이기
-    reply=`${greeting} ${thanks} ${body.split('.')[0]}. ${closing}`;
+  if(reply.length>targetLen*1.8&&targetLen<120){
+    reply=[greeting,thanks,body.split('.')[0]+'.',closing].filter(Boolean).join(' ');
   }
 
   return reply;
@@ -2064,6 +2205,11 @@ function renderReview(el){
             <div style="font-size:11px;color:var(--muted);margin-bottom:4px">마무리 패턴</div>
             <div style="font-size:12px;color:var(--text)">"${profile.closing||'-'}"</div>
           </div>
+          ${profile.styleNote?`
+          <div style="margin-top:10px;padding:10px;background:#1a1a2e;border-radius:6px;border-left:3px solid var(--accent)">
+            <div style="font-size:11px;color:var(--accent);margin-bottom:4px;font-weight:600">AI 스타일 분석</div>
+            <div style="font-size:12px;color:var(--text);line-height:1.6">${profile.styleNote}</div>
+          </div>`:''}
         `:`
           <div style="padding:16px;text-align:center;color:var(--muted);font-size:12px;line-height:1.8">
             ${reviewCampId?'<div style="font-size:24px;margin-bottom:8px">📭</div>이 캠핑장의 댓글 데이터가 아직 없습니다.<br><b style="color:var(--accent)">기본 친절 템플릿</b>으로 답변을 생성합니다.':'캠핑장을 선택하면 스타일 프로필이 표시됩니다.'}
