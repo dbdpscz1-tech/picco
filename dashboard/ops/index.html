@@ -324,6 +324,19 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
             <input type="number" id="edit-siteCount" placeholder="0" min="0">
           </div>
         </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+          <div class="form-group">
+            <label>제안 평일 %</label>
+            <input type="number" id="edit-weekdayRate" placeholder="예: 15" min="0" max="100" step="0.5">
+          </div>
+          <div class="form-group">
+            <label>제안 주말 %</label>
+            <input type="number" id="edit-weekendRate" placeholder="예: 10" min="0" max="100" step="0.5">
+          </div>
+          <div class="form-group" style="align-self:end">
+            <span style="font-size:10px;color:var(--muted)">캠핏 수수료율</span>
+          </div>
+        </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div class="form-group">
             <label>계약일</label>
@@ -481,7 +494,7 @@ const STAGES=['신규 접수','미팅 조율','미팅 확정','계약 협의','�
 const STATUS_CLS={'앱 라이브':'st-live','계약 확정':'st-contract','계약 완료':'st-contract','계약 협의':'st-contract','미팅 확정':'st-meeting','미팅 조율':'st-meeting','신규 접수':'st-new','보류':'st-hold','종결':'st-closed','MOU 체결':'st-mou'};
 const STATUS_ORDER=['앱 라이브','계약 확정','계약 협의','미팅 확정','미팅 조율','신규 접수','재접촉 필요','MOU 체결','보류','종결'];
 const STATUS_EMOJI={'앱 라이브':'🟢','계약 확정':'🔵','계약 완료':'🔵','계약 협의':'🟣','미팅 확정':'🟡','미팅 조율':'🟠','신규 접수':'⚪','재접촉 필요':'🟠','보류':'🔴','종결':'⚫','MOU 체결':'🏗️'};
-const TASK_STATUSES=['완료','진행중','외부대기','미시작','보류'];
+const TASK_STATUSES=['완료','미시작'];
 
 // Signal auto-derive from status (DB signal 무시 — 항상 상태 기반)
 function campSignal(c){return STATUS_EMOJI[c.status]||'⚪'}
@@ -1059,6 +1072,7 @@ function renderPipeline(el){
           <span style="font-size:11px;color:var(--muted);white-space:nowrap">${c.md||''}</span>
         </div>
         ${c.region?`<div style="font-size:11px;color:var(--muted);margin-bottom:2px">${c.region}</div>`:''}
+        ${(c.weekdayRate||c.weekendRate)?`<div style="font-size:10px;margin-bottom:2px;display:flex;gap:6px"><span style="color:var(--accent)">평일 ${c.weekdayRate||'-'}%</span><span style="color:var(--yellow)">주말 ${c.weekendRate||'-'}%</span></div>`:''}
         ${c.notes?`<div class="info">${trunc(c.notes,50)}</div>`:''}
         <div class="actions">${btns}<button class="edit-btn" onclick="event.stopPropagation();openEditModal('${pk}')">✏️ 수정</button></div>
       </div>`;
@@ -1269,11 +1283,10 @@ function renderMatrix(el){
       if(taskDef.type==='check'){
         const status=match?.status||'미시작';
         const isDone=status==='완료';
-        const isWip=status==='진행중';
-        const icon=isDone?'✅':isWip?'🔄':'';
-        const bg=isDone?'#0d2818':isWip?'#1a1a2e':'';
+        const icon=isDone?'✅':'';
+        const bg=isDone?'#0d2818':'';
         const clickFn=match?`cycleStatus('${pk}','${match.taskName||tName}')`:`createAndCycleTask('${pk}','${tName}','${taskDef.label}')`;
-        html+=`<td onclick="${clickFn}" style="text-align:center;padding:${rowPad-2}px 1px;cursor:pointer;${borderLeft}${bg?'background:'+bg+';':''}font-size:${cellFont}px" title="${taskDef.label}: ${status}">${icon}</td>`;
+        html+=`<td onclick="${clickFn}" style="text-align:center;padding:${rowPad-2}px 1px;cursor:pointer;${borderLeft}${bg?'background:'+bg+';':''}font-size:${cellFont}px" title="${taskDef.label}: ${isDone?'진행':'미진행'}">${icon}</td>`;
       }else{
         const memo=match?.memo||'';
         const status=match?.status||'미시작';
@@ -1281,7 +1294,7 @@ function renderMatrix(el){
         const hasContent=memo||isDone;
         const icon=isDone?'✅':memo?'📝':'';
         const bg=hasContent?'#1a1520':'';
-        html+=`<td onclick="openTaskInput(this,'${pk}','${tName}','${taskDef.label}')" style="text-align:center;padding:${rowPad-2}px 1px;cursor:pointer;${borderLeft}${bg?'background:'+bg+';':''}font-size:${cellFont}px;position:relative" title="${taskDef.label}: ${memo||status}${taskDef.note?' ('+taskDef.note+')':''}">${icon}</td>`;
+        html+=`<td onclick="openTaskInput(event,this,'${pk}','${tName}','${taskDef.label}')" style="text-align:center;padding:${rowPad-2}px 1px;cursor:pointer;${borderLeft}${bg?'background:'+bg+';':''}font-size:${cellFont}px;position:relative" title="${taskDef.label}: ${memo||status}${taskDef.note?' ('+taskDef.note+')':''}">${icon}</td>`;
       }
     });
 
@@ -1342,31 +1355,33 @@ function updateMatrixPref(key,val){
 }
 
 // 내용기입/주기 과업 인라인 편집
-function openTaskInput(cell,campId,taskName,label){
+function openTaskInput(evt,cell,campId,taskName,label){
+  if(evt){evt.stopPropagation();evt.preventDefault();}
   document.querySelectorAll('.mx-memo-edit').forEach(e=>e.remove());
   const ct=tasks.find(t=>(t.PK===`CAMP#${campId}`)&&((t.taskName||'')===taskName));
   const curMemo=ct?.memo||'';
   const curStatus=ct?.status||'미시작';
+  const isDone=curStatus==='완료';
 
   const editor=document.createElement('div');
   editor.className='mx-memo-edit';
-  editor.style.width='220px';
+  editor.style.cssText='width:240px;position:absolute;z-index:10;top:100%;left:0;background:#161b22;border:1px solid var(--accent);border-radius:8px;padding:10px;box-shadow:0 8px 24px rgba(0,0,0,.5)';
+  editor.onclick=function(e){e.stopPropagation()};
   editor.innerHTML=`
     <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:6px">${label}</div>
-    <textarea id="mx-task-ta" style="width:100%;background:#0d1117;color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px;font-size:11px;font-family:inherit;min-height:50px">${curMemo}</textarea>
+    <textarea id="mx-task-ta" style="width:100%;box-sizing:border-box;background:#0d1117;color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px;font-size:11px;font-family:inherit;min-height:50px;resize:vertical">${curMemo}</textarea>
     <div style="display:flex;gap:4px;margin-top:6px;align-items:center">
       <select id="mx-task-status" style="background:#0d1117;color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:10px;flex:1">
-        <option value="미시작" ${curStatus==='미시작'?'selected':''}>⬜ 미시작</option>
-        <option value="진행중" ${curStatus==='진행중'?'selected':''}>🔄 진행중</option>
-        <option value="완료" ${curStatus==='완료'?'selected':''}>✅ 완료</option>
+        <option value="미시작" ${!isDone?'selected':''}>⬜ 미진행</option>
+        <option value="완료" ${isDone?'selected':''}>✅ 진행</option>
       </select>
       <button onclick="this.closest('.mx-memo-edit').remove()" style="font-size:10px;padding:3px 8px;border-radius:4px;cursor:pointer;border:1px solid var(--border);background:var(--card);color:var(--muted)">취소</button>
       <button onclick="saveTaskInput('${campId}','${taskName}','${label}')" style="font-size:10px;padding:3px 8px;border-radius:4px;cursor:pointer;border:1px solid var(--accent);background:var(--accent);color:#000;font-weight:700">저장</button>
     </div>
   `;
+  cell.style.position='relative';
   cell.appendChild(editor);
   editor.querySelector('textarea').focus();
-  event.stopPropagation();
 }
 
 async function saveTaskInput(campId,taskName,label){
@@ -1410,12 +1425,10 @@ function calcRate(camp,campTaskMap){
 }
 
 async function cycleStatus(campId,taskName){
-  // Cycle through statuses on click
+  // 진행/미진행 토글
   const task=tasks.find(t=>(campKey2(t)===campId)&&(t.taskName===taskName||t.SK===`TASK#${taskName}`));
   if(!task)return;
-  const curIdx=TASK_STATUSES.indexOf(task.status);
-  const nextIdx=(curIdx+1)%TASK_STATUSES.length;
-  const newStatus=TASK_STATUSES[nextIdx];
+  const newStatus=task.status==='완료'?'미시작':'완료';
   try{
     const res=await fetch(`${API}/api/tasks/${encodeURIComponent(campId)}/${encodeURIComponent(taskName)}`,{
       method:'PUT',headers:{'Content-Type':'application/json'},
@@ -1712,6 +1725,8 @@ function openEditModal(pk){
   document.getElementById('edit-contractDate').value=c.contractDate||'';
 
   document.getElementById('edit-planStartDate').value=c.planStartDate||'';
+  document.getElementById('edit-weekdayRate').value=c.weekdayRate||'';
+  document.getElementById('edit-weekendRate').value=c.weekendRate||'';
 
   // 미팅 필드
   document.getElementById('edit-nextMeeting').value=c.nextMeeting?c.nextMeeting.slice(0,10):'';
@@ -1795,6 +1810,8 @@ async function saveEdit(e){
     phone:document.getElementById('edit-phone').value,
     revenue:document.getElementById('edit-revenue').value,
     consultation:document.getElementById('edit-consultation').value,
+    weekdayRate:document.getElementById('edit-weekdayRate').value,
+    weekendRate:document.getElementById('edit-weekendRate').value,
   };
 
   try{
@@ -2535,7 +2552,7 @@ async function createAndCycleTask(campId,taskName,title){
   try{
     const res=await fetch(`${API}/api/tasks`,{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({PK:`CAMP#${campId}`,SK:`TASK#${taskName}`,taskName,title,status:'미시작',taskType,category,campCode:campId,pin:'1234'})
+      body:JSON.stringify({PK:`CAMP#${campId}`,SK:`TASK#${taskName}`,taskName,title,status:'완료',taskType,category,campCode:campId,pin:'1234'})
     });
     const json=await res.json();
     if(json.success){
