@@ -1240,7 +1240,7 @@ function renderMatrix(el){
         ${showMemo?`<th rowspan="2" style="padding:${rowPad}px 4px;text-align:left;border-bottom:2px solid var(--border);border-left:2px solid var(--border);color:var(--yellow)">메모</th>`:''}
       </tr>
       <tr style="background:#0d1117">
-        ${allTasks.map(t=>`<th style="padding:2px 1px;text-align:center;border-bottom:2px solid var(--border);border-left:1px solid #1e242e;color:var(--muted);font-weight:400;font-size:9px;overflow:hidden;writing-mode:vertical-rl;text-orientation:mixed;height:${rowSize==='compact'?40:rowSize==='wide'?80:60}px" title="${t.label}${t.note?' ('+t.note+')':''}">${t.label}</th>`).join('')}
+        ${allTasks.map(t=>`<th style="padding:4px 3px;text-align:center;border-bottom:2px solid var(--border);border-left:1px solid #1e242e;color:var(--muted);font-weight:400;font-size:10px;white-space:nowrap" title="${t.label}${t.note?' ('+t.note+')':''}">${t.label}</th>`).join('')}
       </tr>
     </thead>
     <tbody>`;
