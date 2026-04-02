@@ -533,6 +533,14 @@ const OP_GROUPS=[
   ]},
 ];
 
+// 복사 가능한 운영 리소스 (링크/양식/템플릿)
+const OP_RESOURCES=[
+  {label:'캠핑케어폼',icon:'📋',text:'https://docs.google.com/forms/d/e/campingcare-form-link',desc:'캠핑케어 설문 폼 링크'},
+  {label:'온보딩요청 양식',icon:'📑',text:'안녕하세요, {캠핑장명} 온보딩 요청드립니다.\n\n- 캠핑장명:\n- 담당자:\n- 연락처:\n- 희망 온보딩 일정:\n- 특이사항:\n\n감사합니다.',desc:'온보딩 요청시 사용하는 양식'},
+  {label:'소개글 양식',icon:'✍️',text:'[캠핑장명]\n\n📍 위치:\n🏕️ 사이트 종류:\n✨ 특징:\n🎯 추천 대상:\n📸 포토스팟:\n\n#{캠핑장명} #캠핏 #캠핑추천',desc:'캠핑장 소개글 작성 템플릿'},
+  {label:'예약 링크 안내 문구',icon:'🔗',text:'캠핏에서 {캠핑장명} 예약하기 👉 https://www.camfit.co.kr/camp/{campCode}',desc:'고객에게 전달하는 예약 안내'},
+];
+
 async function loadAll(){
   try{
     const [c,t]=await Promise.all([
@@ -1093,12 +1101,11 @@ function renderMatrix(el){
   else if(matrixSort==='md')filtered.sort((a,b)=>(a.md||'zzz').localeCompare(b.md||'zzz'));
 
   const mds=[...new Set(liveCamps.map(c=>c.md).filter(Boolean))].sort();
-
-  // 전체 통계
   const totalCheck=OP_GROUPS.flatMap(g=>g.tasks.filter(t=>t.type==='check')).length;
   let totalDone=0,totalAll=0;
   filtered.forEach(c=>{const r=calcRate(c,campTaskMap);totalDone+=Math.round(r*totalCheck/100);totalAll+=totalCheck});
   const overallRate=totalAll?Math.round(totalDone/totalAll*100):0;
+  const allTasks=OP_GROUPS.flatMap(g=>g.tasks.map(t=>({...t,cat:g.cat,color:g.color})));
 
   let html=`
   <!-- 상단 요약 -->
@@ -1134,125 +1141,90 @@ function renderMatrix(el){
     <span style="font-size:11px;color:var(--muted);margin-left:auto">${filtered.length}개소 표시</span>
   </div>
 
-  <!-- 캠핑장 카드 리스트 -->
-  <div style="display:flex;flex-direction:column;gap:8px">`;
+  <!-- 테이블형 매트릭스 -->
+  <div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px;background:var(--card)">
+  <table style="width:100%;border-collapse:collapse;font-size:11px;white-space:nowrap">
+    <thead>
+      <tr style="background:#161b22">
+        <th rowspan="2" style="position:sticky;left:0;z-index:3;background:#161b22;padding:8px 10px;text-align:left;border-bottom:2px solid var(--border);border-right:2px solid var(--border);min-width:120px;font-size:12px;color:var(--text)">캠핑장</th>
+        <th rowspan="2" style="padding:6px 4px;text-align:center;border-bottom:2px solid var(--border);color:var(--muted);min-width:40px">완료</th>
+        ${OP_GROUPS.map(g=>`<th colspan="${g.tasks.length}" style="padding:6px 4px;text-align:center;border-bottom:1px solid var(--border);border-left:2px solid var(--border);color:${g.color};font-weight:800;font-size:11px">${g.cat}</th>`).join('')}
+        <th rowspan="2" style="padding:6px 4px;text-align:left;border-bottom:2px solid var(--border);border-left:2px solid var(--border);color:var(--yellow);min-width:100px">메모</th>
+      </tr>
+      <tr style="background:#0d1117">
+        ${allTasks.map(t=>`<th style="padding:3px 2px;text-align:center;border-bottom:2px solid var(--border);border-left:1px solid #1e242e;color:var(--muted);font-weight:400;font-size:9px;max-width:36px;overflow:hidden;writing-mode:vertical-rl;text-orientation:mixed;height:60px" title="${t.label}${t.note?' ('+t.note+')':''}">${t.label}</th>`).join('')}
+      </tr>
+    </thead>
+    <tbody>`;
 
-  filtered.forEach(c=>{
+  filtered.forEach((c,idx)=>{
     const pk=campKey(c);
     const ct=campTaskMap[c.PK]||[];
     const rate=calcRate(c,campTaskMap);
     const barColor=rate>=80?'var(--green)':rate>=50?'var(--yellow)':'var(--red)';
-    const isOpen=expandedCamp===pk;
-    const planDate=c.planStartDate||'';
-    const planDisplay=planDate?new Date(planDate).toLocaleDateString('ko-KR',{year:'numeric',month:'short',day:'numeric'}):'';
     const memoRaw=(c.matrixMemo||'').trim();
+    const rowBg=idx%2===0?'transparent':'#0a0e14';
 
-    // 카테고리별 완료 카운트
-    const catStats=OP_GROUPS.map(g=>{
-      const checkTasks=g.tasks.filter(t=>t.type==='check');
-      const done=checkTasks.filter(t=>{
-        const match=ct.find(tk=>(tk.taskName||'')==='OP_'+t.id||(tk.taskName||'').includes(t.id));
-        return match&&match.status==='완료';
-      }).length;
-      const inputTasks=g.tasks.filter(t=>t.type!=='check');
-      const inputFilled=inputTasks.filter(t=>{
-        const match=ct.find(tk=>(tk.taskName||'')==='OP_'+t.id||(tk.taskName||'').includes(t.id));
-        return match&&(match.memo||match.status==='완료');
-      }).length;
-      return {cat:g.cat,color:g.color,done,total:checkTasks.length,inputFilled,inputTotal:inputTasks.length};
+    html+=`<tr style="background:${rowBg};border-bottom:1px solid #1a1f2b" onmouseover="this.style.background='#1c2333'" onmouseout="this.style.background='${rowBg}'">
+      <td style="position:sticky;left:0;z-index:2;background:${idx%2===0?'var(--card)':'#0d1117'};padding:6px 10px;border-right:2px solid var(--border);font-weight:600;color:#fff;font-size:12px">
+        <div>${c.name||pk}</div>
+        <div style="font-size:9px;color:var(--muted);font-weight:400;margin-top:1px">${c.md||''}</div>
+      </td>
+      <td style="text-align:center;padding:4px;font-weight:800;font-size:12px;color:${barColor}">${rate}%</td>`;
+
+    allTasks.forEach((taskDef,ti)=>{
+      const tName='OP_'+taskDef.id;
+      const match=ct.find(t=>(t.taskName||'')===tName||(t.taskName||'').includes(taskDef.id));
+      const isFirstInGroup=ti===0||allTasks[ti-1].cat!==taskDef.cat;
+      const borderLeft=isFirstInGroup?'border-left:2px solid var(--border);':'border-left:1px solid #1a1f2b;';
+
+      if(taskDef.type==='check'){
+        const status=match?.status||'미시작';
+        const isDone=status==='완료';
+        const isWip=status==='진행중';
+        const icon=isDone?'✅':isWip?'🔄':'';
+        const bg=isDone?'#0d2818':isWip?'#1a1a2e':'';
+        const clickFn=match?`cycleStatus('${pk}','${match.taskName||tName}')`:`createAndCycleTask('${pk}','${tName}','${taskDef.label}')`;
+        html+=`<td onclick="${clickFn}" style="text-align:center;padding:2px;cursor:pointer;${borderLeft}${bg?'background:'+bg+';':''}font-size:13px" title="${taskDef.label}: ${status}">${icon}</td>`;
+      }else{
+        const memo=match?.memo||'';
+        const status=match?.status||'미시작';
+        const isDone=status==='완료';
+        const hasContent=memo||isDone;
+        const icon=isDone?'✅':memo?'📝':'';
+        const bg=hasContent?'#1a1520':'';
+        html+=`<td onclick="openTaskInput(this,'${pk}','${tName}','${taskDef.label}')" style="text-align:center;padding:2px;cursor:pointer;${borderLeft}${bg?'background:'+bg+';':''}font-size:13px;position:relative" title="${taskDef.label}: ${memo||status}${taskDef.note?' ('+taskDef.note+')':''}">${icon}</td>`;
+      }
     });
 
-    // 요약 바 카드 (접힌 상태)
-    html+=`
-    <div style="background:var(--card);border:1px solid ${isOpen?'var(--accent)':'var(--border)'};border-radius:10px;overflow:hidden;transition:.2s">
-      <!-- 헤더 (클릭으로 토글) -->
-      <div onclick="expandedCamp=expandedCamp==='${pk}'?null:'${pk}';render()" style="display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;transition:.15s${isOpen?';background:#1c2333':''}">
-        <div style="font-size:14px">${campSignal(c)}</div>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:700;color:#fff">${c.name||pk}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:1px">${c.md||''} ${c.region?'· '+c.region:''} ${planDisplay?'· 플랜 '+planDisplay:''}</div>
-        </div>
-        <!-- 카테고리 미니 진행바 -->
-        <div style="display:flex;gap:3px;align-items:center">
-          ${catStats.map(s=>{
-            const pct=s.total?Math.round(s.done/s.total*100):0;
-            const filled=s.inputTotal?s.inputFilled:0;
-            return `<div title="${s.cat}: ${s.done}/${s.total}완료${s.inputTotal?' · 기입 '+s.inputFilled+'/'+s.inputTotal:''}" style="width:${Math.max(24,s.total*6+s.inputTotal*4)}px;height:6px;background:#21262d;border-radius:3px;overflow:hidden;position:relative">
-              <div style="height:100%;width:${pct}%;background:${s.color};border-radius:3px;transition:.3s"></div>
-            </div>`;
-          }).join('')}
-        </div>
-        <div style="min-width:50px;text-align:right">
-          <span style="font-size:15px;font-weight:800;color:${barColor}">${rate}%</span>
-        </div>
-        <div style="color:var(--muted);font-size:14px;transition:.2s;transform:rotate(${isOpen?180:0}deg)">▼</div>
-      </div>`;
-
-    // 펼친 상태: 카테고리별 체크리스트
-    if(isOpen){
-      html+=`<div style="padding:0 16px 16px;border-top:1px solid var(--border)">
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;margin-top:12px">`;
-
-      OP_GROUPS.forEach(g=>{
-        html+=`<div style="background:#0d1117;border:1px solid var(--border);border-radius:8px;padding:12px;border-top:3px solid ${g.color}">
-          <div style="font-size:12px;font-weight:700;color:${g.color};margin-bottom:8px;display:flex;justify-content:space-between">
-            <span>${g.cat}</span>
-            <span style="font-size:10px;color:var(--muted);font-weight:400">${g.tasks.filter(t=>t.type==='check').length?(() => {const d=g.tasks.filter(t=>t.type==='check').filter(t=>{const m=ct.find(tk=>(tk.taskName||'')==='OP_'+t.id);return m&&m.status==='완료'}).length;return d+'/'+g.tasks.filter(t=>t.type==='check').length})():''}</span>
-          </div>`;
-
-        g.tasks.forEach(taskDef=>{
-          const tName='OP_'+taskDef.id;
-          const match=ct.find(t=>(t.taskName||'')===tName||(t.taskName||'').includes(taskDef.id));
-
-          if(taskDef.type==='check'){
-            const status=match?.status||'미시작';
-            const isDone=status==='완료';
-            const isWip=status==='진행중';
-            const icon=isDone?'✅':isWip?'🔄':'⬜';
-            const textColor=isDone?'var(--green)':isWip?'var(--accent)':'var(--muted)';
-            const clickFn=match?`cycleStatus('${pk}','${match.taskName||tName}')`:`createAndCycleTask('${pk}','${tName}','${taskDef.label}')`;
-            html+=`<div onclick="${clickFn}" style="display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer;border-bottom:1px solid #1a1f2b;transition:.1s" onmouseover="this.style.background='#161b22'" onmouseout="this.style.background='transparent'">
-              <span style="font-size:14px;min-width:20px;text-align:center">${icon}</span>
-              <span style="font-size:12px;color:${textColor};${isDone?'text-decoration:line-through;opacity:.7':''}">${taskDef.label}</span>
-            </div>`;
-          }else{
-            // input / periodic
-            const memo=match?.memo||'';
-            const status=match?.status||'미시작';
-            const isDone=status==='완료';
-            const icon=taskDef.type==='periodic'?'🔄':'📝';
-            const preview=memo||'클릭하여 입력';
-            html+=`<div class="mx-memo-cell" style="display:flex;align-items:flex-start;gap:8px;padding:5px 0;cursor:pointer;border-bottom:1px solid #1a1f2b;position:relative;transition:.1s" onmouseover="this.style.background='#161b22'" onmouseout="this.style.background='transparent'" onclick="openTaskInput(this,'${pk}','${tName}','${taskDef.label}')">
-              <span style="font-size:14px;min-width:20px;text-align:center">${isDone?'✅':icon}</span>
-              <div style="flex:1;min-width:0">
-                <div style="font-size:12px;color:${memo?'#fff':'var(--muted)'}">${taskDef.label}</div>
-                <div style="font-size:10px;color:${memo?'var(--accent)':'#333'};margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${memo||'—'}</div>
-              </div>
-              ${taskDef.note?`<span style="font-size:9px;color:#444;white-space:nowrap">${taskDef.note}</span>`:''}
-            </div>`;
-          }
-        });
-        html+=`</div>`;
-      });
-
-      // 메모 영역
-      html+=`</div>
-        <div style="margin-top:10px;background:#0d1117;border:1px solid var(--border);border-radius:8px;padding:12px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-            <span style="font-size:11px;font-weight:700;color:var(--yellow)">메모</span>
-            <button class="edit-btn" onclick="event.stopPropagation();openEditModal('${pk}')">✏️ 상세 수정</button>
-          </div>
-          <div class="mx-memo-cell">
-            <div class="mx-memo-text ${memoRaw?'':'empty'}" onclick="openMatrixMemo(this,'${pk}')" style="font-size:12px;line-height:1.6;min-height:24px">${memoRaw||'클릭하여 메모 추가...'}</div>
-          </div>
-        </div>
-      </div>`;
-    }
-
-    html+=`</div>`;
+    // 메모 열
+    html+=`<td style="padding:4px 8px;border-left:2px solid var(--border);max-width:200px;white-space:normal;word-break:break-all">
+      <div class="mx-memo-cell" onclick="openMatrixMemo(this,'${pk}')" style="font-size:10px;color:${memoRaw?'var(--text)':'#333'};cursor:pointer;line-height:1.4;max-height:40px;overflow:hidden">${memoRaw||'+'}</div>
+    </td></tr>`;
   });
 
-  html+=`</div>`;
+  html+=`</tbody></table></div>
+
+  <!-- 운영 리소스 (복사 가능) -->
+  <div style="margin-top:20px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px">
+    <h4 style="margin:0 0 12px;font-size:13px;color:var(--text);display:flex;align-items:center;gap:6px">
+      <span style="font-size:16px">📎</span> 운영 양식 & 링크 <span style="font-size:10px;color:var(--muted);font-weight:400">클릭하면 클립보드에 복사됩니다</span>
+    </h4>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px">
+      ${OP_RESOURCES.map((r,i)=>`
+        <div id="res-card-${i}" onclick="copyResource(${i})" style="background:#0d1117;border:1px solid var(--border);border-radius:8px;padding:12px;cursor:pointer;transition:.2s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <span style="font-size:18px">${r.icon}</span>
+            <span style="font-size:12px;font-weight:700;color:var(--text)">${r.label}</span>
+            <span style="margin-left:auto;font-size:10px;color:var(--accent);opacity:.7">📋 복사</span>
+          </div>
+          <div style="font-size:10px;color:var(--muted);line-height:1.5">${r.desc}</div>
+          <div style="margin-top:6px;padding:6px 8px;background:#161b22;border-radius:4px;font-size:10px;color:#8b949e;max-height:48px;overflow:hidden;white-space:pre-line;font-family:monospace">${r.text.replace(/</g,'&lt;').slice(0,120)}${r.text.length>120?'...':''}</div>
+        </div>
+      `).join('')}
+    </div>
+  </div>`;
+
   el.innerHTML=html;
 }
 
@@ -2158,7 +2130,7 @@ function generateReply(campName,review,profile){
 let reviewCampId='';
 
 function renderReview(el){
-  const liveCamps=camps.filter(c=>['앱 라이브','계약 확정','계약 협의','MOU 체결'].includes(c.status));
+  const liveCamps=camps.filter(c=>c.status==='앱 라이브');
   const selectedCamp=reviewCampId?camps.find(c=>campKey(c)===reviewCampId):null;
   const profile=reviewCampId?CAMP_REPLY_PROFILES[reviewCampId]:null;
   const hasData=profile&&profile.samples&&profile.samples.length>0;
@@ -2292,6 +2264,16 @@ function handleGenerateReply(){
   document.getElementById('rv-output').textContent=reply;
   document.getElementById('rv-topics').innerHTML=topics.length?
     `<div style="font-size:11px;color:var(--muted);margin-bottom:4px">감지된 토픽</div>${topics.map(t=>`<span class="rv-tag" style="background:#3b2f63;color:var(--purple)">${t}</span>`).join('')}`:'';
+}
+
+function copyResource(idx){
+  const r=OP_RESOURCES[idx];
+  if(!r)return;
+  navigator.clipboard.writeText(r.text).then(()=>showToast(`${r.label} 복사 완료!`)).catch(()=>{
+    const ta=document.createElement('textarea');ta.value=r.text;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);showToast(`${r.label} 복사 완료!`);
+  });
+  const card=document.getElementById('res-card-'+idx);
+  if(card){card.style.borderColor='var(--green)';setTimeout(()=>{card.style.borderColor='var(--border)'},1500)}
 }
 
 function copyReply(){
