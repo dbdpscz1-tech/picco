@@ -2017,6 +2017,9 @@ function extractTopics(review){
   return topics;
 }
 
+// 랜덤 선택 유틸
+function pick(arr){return arr[Math.floor(Math.random()*arr.length)]}
+
 // 답변 생성 (캠핑장 페르소나 기반)
 function generateReply(campName,review,profile){
   const p=profile||DEFAULT_STYLE;
@@ -2029,84 +2032,128 @@ function generateReply(campName,review,profile){
   const useKk=p.traits&&p.traits.some(t=>t.includes('ㅎㅎ')||t.includes('ㅋㅋ'));
   const endChar=useTilde?'~':p.exclamation>1?'!':'.';
   const smiley=p.emojiUse?(useTilde?'^-^':useKk?' ㅎㅎ':' ^^'):'';
+  const isGeneric=topics.length===0||(review.length<30&&!isNeg);
 
-  // 인사
+  // 인사 (다양한 변형)
   let greeting='';
   if(p.greeting&&p.greeting.length>3){
     greeting=p.greeting.replace('{campName}',campName);
   }else if(isCasual){
-    greeting='';
+    greeting=pick(['',`${campName}입니다${smiley}`,`안녕하세요${smiley}`]);
   }else{
-    greeting=`안녕하세요, ${campName}입니다${smiley||'.'}`;
+    greeting=pick([
+      `안녕하세요, ${campName}입니다${smiley||'.'}`,
+      `안녕하세요! ${campName} 캠핑장입니다${endChar}`,
+      `${campName}입니다${smiley||'.'}`,
+    ]);
   }
 
-  // 감사 (스타일별 분기)
+  // 감사 표현 (다양한 변형)
   let thanks='';
   if(isShort){
-    thanks=isNeg?'':'감사합니다'+endChar;
+    thanks=isNeg?'':pick(['감사합니다'+endChar,'후기 감사드려요'+endChar,'방문 감사합니다'+endChar]);
   }else if(isCasual){
-    thanks=`후기 작성 감사드려요${smiley}`;
+    thanks=pick([
+      `후기 작성 감사드려요${smiley}`,
+      `후기 남겨주셔서 감사합니다${smiley}`,
+      `리뷰 감사드려요${smiley}`,
+      `후기 작성해주셔서 감사해요${smiley}`,
+    ]);
   }else{
-    thanks=`소중한 후기 남겨주셔서 정말 감사합니다${endChar}`;
+    thanks=pick([
+      `소중한 후기 남겨주셔서 정말 감사합니다${endChar}`,
+      `후기 남겨주셔서 진심으로 감사드립니다${endChar}`,
+      `방문해 주시고 소중한 후기까지 남겨주셔서 감사합니다${endChar}`,
+      `이렇게 후기를 남겨주셔서 감사합니다${endChar}`,
+    ]);
   }
 
-  // 본문 (토픽별 반응 — 스타일 맞춤)
-  const casual={
-    '청결':`청소 깨끗하다고 해주시니 보람차네요${smiley}`,
-    '친절':`따뜻한 말씀 감사드려요~ 저도 기분이 좋습니다${smiley}`,
-    '자연환경':`자연환경 좋아해 주셔서 기쁩니다${smiley}`,
-    '시설':`시설 만족하셨다니 다행이에요${endChar}`,
-    '가족/아이':`아이들과 좋은 시간 보내셨군요${smiley} 뿌듯합니다`,
-    '힐링':`힐링하고 가신 것 같아 다행입니다${smiley}`,
-    '식사':`맛있는 거 많이 드셨나 보네요${smiley}`,
-    '불멍/야경':`불멍 하셨군요${smiley} 좋은 추억이 되셨길 바랍니다`,
-    '사이트 공간':`사이트 넓게 쓰셨다니 좋았겠어요${endChar}`,
-    '재방문의사':`또 방문해 주신다니 감사합니다${smiley}`,
-    '아쉬운점':`아쉬운 부분 말씀해주시면 바로 개선하겠습니다${endChar} 불편드려 죄송해요`,
+  // 본문 (토픽별 반응 — 스타일 맞춤, 각 토픽에 2-3 변형)
+  const casualVar={
+    '청결':[`청소 깨끗하다고 해주시니 보람차네요${smiley}`,`깨끗하게 관리하려고 노력 중인데 알아봐 주셔서 감사해요${smiley}`,`청결 칭찬해주시면 힘이 나요${smiley}`],
+    '친절':[`따뜻한 말씀 감사드려요~ 저도 기분이 좋습니다${smiley}`,`친절하다고 해주시니 더 열심히 해야겠어요${smiley}`,`좋은 말씀 감사합니다${smiley}`],
+    '자연환경':[`자연환경 좋아해 주셔서 기쁩니다${smiley}`,`저희 자연 풍경을 즐기셨다니 다행이에요${smiley}`,`자연 속에서 좋은 시간 보내셨군요${smiley}`],
+    '시설':[`시설 만족하셨다니 다행이에요${endChar}`,`시설 관리에 더 힘쓸게요${smiley}`,`시설 좋게 봐주셔서 감사합니다${smiley}`],
+    '가족/아이':[`아이들과 좋은 시간 보내셨군요${smiley} 뿌듯합니다`,`가족분들이랑 즐거운 추억 만드셨길 바랍니다${smiley}`,`아이들이 좋아했다니 저희도 기뻐요${smiley}`],
+    '힐링':[`힐링하고 가신 것 같아 다행입니다${smiley}`,`편안하게 쉬다 가셨다니 좋네요${smiley}`,`힐링 캠핑 되셨다니 보람차요${smiley}`],
+    '식사':[`맛있는 거 많이 드셨나 보네요${smiley}`,`맛있게 드셨다니 좋습니다${smiley}`,`캠핑 음식이 최고죠${smiley}`],
+    '불멍/야경':[`불멍 하셨군요${smiley} 좋은 추억이 되셨길 바랍니다`,`불멍의 낭만을 즐기셨네요${smiley}`,`밤이 특별한 추억이 되셨길 바랍니다${smiley}`],
+    '사이트 공간':[`사이트 넓게 쓰셨다니 좋았겠어요${endChar}`,`쾌적하게 이용하셨다니 다행이에요${smiley}`,`넓은 사이트에서 편하게 지내셨군요${smiley}`],
+    '재방문의사':[`또 방문해 주신다니 감사합니다${smiley}`,`다음에 또 놀러오세요${smiley}`,`또 뵐 수 있길 기대할게요${smiley}`],
+    '아쉬운점':[`아쉬운 부분 말씀해주시면 바로 개선하겠습니다${endChar} 불편드려 죄송해요`,`불편하신 부분은 꼭 고쳐놓을게요${endChar}`,`말씀해주신 부분 바로 확인하겠습니다${endChar}`],
   };
-  const formal={
-    '청결':`청결하게 느끼셨다니 저희 관리팀이 보람을 느낍니다${endChar}`,
-    '친절':'따뜻한 말씀에 저희 직원들도 큰 힘이 됩니다.',
-    '자연환경':`저희 캠핑장의 자연환경을 좋아해 주셔서 기쁩니다${endChar}`,
-    '시설':'시설 관련 만족해 주셔서 감사합니다. 더 나은 환경을 위해 계속 노력하겠습니다.',
-    '가족/아이':'가족분들과 함께 즐거운 시간 보내셨다니 정말 뿌듯합니다.',
-    '힐링':'편안한 힐링 시간을 보내셨다니 다행입니다.',
-    '식사':'맛있는 식사까지 즐기셨다니 좋은 추억이 되셨길 바랍니다.',
-    '불멍/야경':'불멍과 함께한 밤이 특별한 추억이 되셨길 바랍니다.',
-    '사이트 공간':'넓은 사이트에서 쾌적하게 이용해 주셨다니 기쁩니다.',
-    '재방문의사':`다음에도 찾아주신다니 정말 감사하고 기대가 됩니다${endChar}`,
-    '아쉬운점':'말씀해 주신 아쉬운 부분은 저희가 꼭 개선하도록 하겠습니다. 소중한 의견 감사합니다.',
+  const formalVar={
+    '청결':[`청결하게 느끼셨다니 저희 관리팀이 보람을 느낍니다${endChar}`,`깨끗하게 관리하기 위해 노력하고 있는데 알아봐 주셔서 감사합니다${endChar}`,`청결에 대한 긍정적인 평가 감사드립니다${endChar}`],
+    '친절':[`따뜻한 말씀에 저희 직원들도 큰 힘이 됩니다.`,`친절하다고 말씀해 주셔서 직원들에게도 전하겠습니다.`,`좋은 말씀에 더 노력하겠습니다.`],
+    '자연환경':[`저희 캠핑장의 자연환경을 좋아해 주셔서 기쁩니다${endChar}`,`아름다운 자연을 함께 즐기셨다니 감사합니다${endChar}`,`자연 속에서 좋은 시간 보내셨다니 보람됩니다${endChar}`],
+    '시설':[`시설 관련 만족해 주셔서 감사합니다. 더 나은 환경을 위해 계속 노력하겠습니다.`,`시설을 좋게 평가해 주셔서 감사드립니다. 더욱 관리에 힘쓰겠습니다.`,`시설 만족도에 감사드리며 앞으로도 최선을 다하겠습니다.`],
+    '가족/아이':[`가족분들과 함께 즐거운 시간 보내셨다니 정말 뿌듯합니다.`,`사랑하는 가족과의 소중한 시간이 되셨길 바랍니다.`,`아이들과 좋은 추억 만드셨다니 기쁩니다.`],
+    '힐링':[`편안한 힐링 시간을 보내셨다니 다행입니다.`,`힐링 캠핑이 되셨다니 저희도 보람을 느낍니다.`,`여유로운 시간 보내셨다니 감사합니다.`],
+    '식사':[`맛있는 식사까지 즐기셨다니 좋은 추억이 되셨길 바랍니다.`,`식사도 만족스러우셨다니 기쁩니다.`,`맛있는 시간 함께하셨다니 감사합니다.`],
+    '불멍/야경':[`불멍과 함께한 밤이 특별한 추억이 되셨길 바랍니다.`,`아름다운 밤을 즐기셨다니 기쁩니다.`,`야경과 함께 낭만적인 시간이 되셨길 바랍니다.`],
+    '사이트 공간':[`넓은 사이트에서 쾌적하게 이용해 주셨다니 기쁩니다.`,`사이트 공간을 만족하셨다니 감사합니다.`,`쾌적한 캠핑이 되셨다니 다행입니다.`],
+    '재방문의사':[`다음에도 찾아주신다니 정말 감사하고 기대가 됩니다${endChar}`,`또 방문해 주신다니 감사합니다. 더 좋은 모습으로 보답하겠습니다${endChar}`,`재방문을 기다리겠습니다. 감사합니다${endChar}`],
+    '아쉬운점':[`말씀해 주신 아쉬운 부분은 저희가 꼭 개선하도록 하겠습니다. 소중한 의견 감사합니다.`,`불편을 드려 죄송합니다. 말씀하신 부분 반드시 개선하겠습니다.`,`소중한 의견 감사드리며 빠르게 개선하도록 하겠습니다.`],
   };
-  const topicResponses=isCasual?casual:formal;
+  const topicVar=isCasual?casualVar:formalVar;
+
+  // 성의없는/짧은 리뷰를 위한 범용 본문 변형
+  const genericCasual=[
+    `즐거운 시간 보내셨다니 저도 기분이 좋아요${smiley}`,
+    `잘 지내고 가신 것 같아 다행입니다${smiley}`,
+    `좋은 추억 만드셨길 바랍니다${smiley}`,
+    `방문해주셔서 정말 감사드려요${smiley}`,
+    `편안하게 다녀가셨다면 좋겠어요${smiley}`,
+    `캠핑 즐기셨다니 뿌듯하네요${smiley}`,
+    `좋은 시간 되셨다면 그걸로 충분합니다${smiley}`,
+  ];
+  const genericFormal=[
+    `즐거운 시간 보내셨다니 정말 기쁩니다${endChar}`,
+    `좋은 추억 남기셨다면 더할 나위 없이 감사합니다${endChar}`,
+    `방문해 주셔서 진심으로 감사드립니다${endChar}`,
+    `만족하셨다니 저희도 보람을 느낍니다${endChar}`,
+    `편안한 시간이 되셨다면 저희에게도 큰 기쁨입니다${endChar}`,
+    `캠핑을 즐기셨다니 감사합니다${endChar}`,
+    `좋은 시간 보내셨다니 저희도 힘이 됩니다${endChar}`,
+  ];
 
   let body='';
   if(isShort&&isNeg){
-    body='불편드려 죄송합니다. 개선하도록 하겠습니다.';
-  }else if(isShort){
-    body='즐겁게 이용해주셔서 감사합니다.';
+    body=pick(['불편드려 죄송합니다. 개선하도록 하겠습니다.','불편하셨다니 죄송합니다. 바로 확인하겠습니다.','말씀하신 부분 개선하겠습니다. 감사합니다.']);
+  }else if(isShort&&isGeneric){
+    body=pick(['방문 감사합니다.','이용해주셔서 감사합니다.','감사합니다.']);
+  }else if(isGeneric){
+    body=pick(isCasual?genericCasual:genericFormal);
   }else{
     const posTopics=topics.filter(t=>t!=='아쉬운점');
     if(posTopics.length){
-      body=posTopics.slice(0,isLong?4:3).map(t=>topicResponses[t]||'').filter(Boolean).join(' ');
+      body=posTopics.slice(0,isLong?4:3).map(t=>{
+        const variants=topicVar[t];
+        return variants?pick(variants):'';
+      }).filter(Boolean).join(' ');
     }
     if(isNeg){
-      body+=(body?' ':'')+topicResponses['아쉬운점'];
+      body+=(body?' ':'')+pick(topicVar['아쉬운점']);
     }
-    if(!body)body=isCasual?`즐거운 시간 보내셨다니 정말 기쁩니다${smiley}`:`즐거운 시간 보내셨다니 정말 기쁩니다${endChar}`;
+    if(!body)body=pick(isCasual?genericCasual:genericFormal);
   }
 
-  // 마무리
+  // 마무리 (다양한 변형)
   let closing='';
   if(isShort){
-    closing='감사합니다'+endChar;
+    closing=pick(['감사합니다'+endChar,'고맙습니다'+endChar,'또 오세요'+endChar]);
   }else if(p.closing&&p.closing.length>3){
-    closing=p.closing;
+    closing=pick([p.closing,p.closing,`다음에도 좋은 시간 되시길 바랍니다${endChar}`]);
   }else if(isCasual){
-    closing=`또 놀러오세요${smiley}`;
+    closing=pick([`또 놀러오세요${smiley}`,`다음에 또 뵈어요${smiley}`,`또 방문해 주세요${smiley}`,`좋은 하루 보내세요${smiley}`]);
   }else if(useTilde){
-    closing=`다음에도 좋은 추억 만들어 가시길 바랍니다~ 감사합니다${smiley}`;
+    closing=pick([`다음에도 좋은 추억 만들어 가시길 바랍니다~ 감사합니다${smiley}`,`또 방문해 주시길 바랍니다~ 감사합니다${smiley}`,`좋은 시간 되셨길 바랍니다~ 감사합니다${smiley}`]);
   }else{
-    closing=`다음에도 좋은 추억 만들어 가시길 바랍니다. 감사합니다${p.emojiUse?' 🙏':'!'}`;
+    closing=pick([
+      `다음에도 좋은 추억 만들어 가시길 바랍니다. 감사합니다${p.emojiUse?' 🙏':'!'}`,
+      `또 찾아주시면 더 좋은 모습으로 보답하겠습니다. 감사합니다${p.emojiUse?' 🙏':'!'}`,
+      `다음 방문도 기대하겠습니다. 감사합니다${p.emojiUse?' 🙏':'!'}`,
+    ]);
   }
 
   // 조합
@@ -2128,6 +2175,8 @@ function generateReply(campName,review,profile){
 }
 
 let reviewCampId='';
+let reviewState={review:'',reply:'',topics:[]}; // 렌더링 간 상태 유지
+let reviewLog=JSON.parse(localStorage.getItem('picco_review_log')||'[]'); // 리뷰 로그
 
 function renderReview(el){
   const liveCamps=camps.filter(c=>c.status==='앱 라이브');
@@ -2231,9 +2280,52 @@ function renderReview(el){
         <div id="rv-topics" style="margin-top:10px"></div>
       </div>
     </div>
+  </div>
+
+  <!-- 리뷰 로그 -->
+  <div style="margin-top:20px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <h4 style="margin:0;font-size:13px;color:var(--text)">📒 답변 생성 기록 <span style="font-weight:400;color:var(--muted);font-size:11px">(${reviewLog.length}건)</span></h4>
+      <div style="display:flex;gap:6px">
+        <button class="rv-btn-copy" onclick="downloadReviewLog()">📥 CSV 다운로드</button>
+        <button class="rv-btn-copy" onclick="if(confirm('전체 기록을 삭제하시겠습니까?')){reviewLog=[];localStorage.setItem('picco_review_log','[]');render()}" style="color:var(--red)">🗑️ 초기화</button>
+      </div>
+    </div>
+    ${reviewLog.length?`
+    <div style="max-height:300px;overflow-y:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead><tr style="background:#161b22;position:sticky;top:0">
+          <th style="padding:6px 8px;text-align:left;color:var(--muted);border-bottom:1px solid var(--border)">일시</th>
+          <th style="padding:6px 8px;text-align:left;color:var(--muted);border-bottom:1px solid var(--border)">캠핑장</th>
+          <th style="padding:6px 8px;text-align:left;color:var(--muted);border-bottom:1px solid var(--border)">리뷰 요약</th>
+          <th style="padding:6px 8px;text-align:left;color:var(--muted);border-bottom:1px solid var(--border)">답변 요약</th>
+          <th style="padding:6px 4px;text-align:center;color:var(--muted);border-bottom:1px solid var(--border)">복사</th>
+        </tr></thead>
+        <tbody>
+        ${reviewLog.slice().reverse().map((log,i)=>`
+          <tr style="border-bottom:1px solid #1a1f2b" onmouseover="this.style.background='#1c2333'" onmouseout="this.style.background=''">
+            <td style="padding:5px 8px;color:var(--muted);white-space:nowrap">${log.date||''}</td>
+            <td style="padding:5px 8px;color:var(--accent);font-weight:600">${log.camp||''}</td>
+            <td style="padding:5px 8px;color:var(--text);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(log.review||'').slice(0,50)}${(log.review||'').length>50?'...':''}</td>
+            <td style="padding:5px 8px;color:var(--text);max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(log.reply||'').slice(0,60)}${(log.reply||'').length>60?'...':''}</td>
+            <td style="padding:5px 4px;text-align:center"><button onclick="event.stopPropagation();navigator.clipboard.writeText(reviewLog[${reviewLog.length-1-i}].reply);showToast('복사 완료!')" style="background:none;border:none;cursor:pointer;font-size:12px">📋</button></td>
+          </tr>
+        `).join('')}
+        </tbody>
+      </table>
+    </div>`:`
+    <div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">아직 생성된 답변이 없습니다.</div>
+    `}
   </div>`;
 
   el.innerHTML=html;
+  // 상태 복원
+  if(reviewState.review){const ta=document.getElementById('rv-review');if(ta)ta.value=reviewState.review}
+  if(reviewState.reply){const o=document.getElementById('rv-output');if(o)o.textContent=reviewState.reply}
+  if(reviewState.topics&&reviewState.topics.length){
+    const t=document.getElementById('rv-topics');
+    if(t)t.innerHTML=`<div style="font-size:11px;color:var(--muted);margin-bottom:4px">감지된 토픽</div>${reviewState.topics.map(t=>`<span class="rv-tag" style="background:#3b2f63;color:var(--purple)">${t}</span>`).join('')}`;
+  }
 }
 
 function handleGenerateReply(){
@@ -2260,10 +2352,34 @@ function handleGenerateReply(){
     reply=sentences.slice(0,3).join('. ')+'.';
   }
 
+  // 상태 저장 (렌더 후 복원용)
+  reviewState={review,reply,topics};
+
   // 출력
   document.getElementById('rv-output').textContent=reply;
   document.getElementById('rv-topics').innerHTML=topics.length?
     `<div style="font-size:11px;color:var(--muted);margin-bottom:4px">감지된 토픽</div>${topics.map(t=>`<span class="rv-tag" style="background:#3b2f63;color:var(--purple)">${t}</span>`).join('')}`:'';
+
+  // 로그 저장
+  const now=new Date();
+  const dateStr=`${now.getMonth()+1}/${now.getDate()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  reviewLog.push({date:dateStr,camp:campName,review,reply,topics,campId:reviewCampId,timestamp:now.toISOString()});
+  localStorage.setItem('picco_review_log',JSON.stringify(reviewLog));
+}
+
+function downloadReviewLog(){
+  if(!reviewLog.length){showToast('다운로드할 기록이 없습니다','var(--red)');return}
+  const BOM='\uFEFF';
+  const header='일시,캠핑장,고객리뷰,생성답변,토픽\n';
+  const rows=reviewLog.map(l=>{
+    const esc=s=>'"'+(s||'').replace(/"/g,'""').replace(/\n/g,' ')+'"';
+    return `${esc(l.date)},${esc(l.camp)},${esc(l.review)},${esc(l.reply)},${esc((l.topics||[]).join(', '))}`;
+  }).join('\n');
+  const blob=new Blob([BOM+header+rows],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=`picco-review-log-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();URL.revokeObjectURL(a.href);
+  showToast('CSV 다운로드 완료!');
 }
 
 function copyResource(idx){
